@@ -322,7 +322,7 @@
             listener({
                 index: start,
                 array: this._array,
-                method: "splice",
+                method: removedElements.length === rest.length ? "replace" : "splice",
                 oldValues: removedElements,
                 newValues: rest,
             });
