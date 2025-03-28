@@ -320,7 +320,7 @@
         
         for (const listener of this._listeners)
             listener({
-                index: 0,
+                index: start,
                 array: this._array,
                 method: "splice",
                 oldValues: removedElements,
