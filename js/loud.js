@@ -13,55 +13,72 @@
 
 /**
 @template T
-*/ export class Loud
+*/ export class ReadonlyLoud
 {
     /**
     @param {T} startingValue
-    @public*/ constructor(startingValue)
+    @protected*/ constructor(startingValue)
     {
         /**
         @type {T}
-        @private*/ this._value = startingValue;
+        @protected*/ this.storedValue = startingValue;
         /**
         @type {LoudListener<T>[]}
-        @private*/ this._listeners = [];
+        @protected*/ this.listeners = [];
     }
 
     /**
     @public*/ get value() { return this.get() }
-    /**
-    @public*/ set value(value) { this.set(value) }
 
     /**
     @returns {Readonly<T>}
-    @public*/ get() { return this._value }
-    /**
-    @param {Readonly<T>} value
-    @public*/ set(value)
-    {
-        const oldValue = this._value;
-        this._value = value;
-
-        for (const listener of this._listeners)
-            listener({
-                oldValue: oldValue,
-                newValue: value,
-            });
-    }
+    @public*/ get() { return this.storedValue }
 
     /**
     @param {LoudListener<T>} listener
     @public*/ addListener(listener)
     {
-        this._listeners.push(listener);
+        this.listeners.push(listener);
     }
     /**
     @param {LoudListener<T>} listener
     @public*/ removeListener(listener)
     {
-        const index = this._listeners.indexOf(listener);
+        const index = this.listeners.indexOf(listener);
         if (index >= 0)
-            this._listeners.splice(index, 1);
+            this.listeners.splice(index, 1);
+    }
+}
+
+/**
+@extends {ReadonlyLoud<T>}
+@template T
+*/ export class Loud extends ReadonlyLoud
+{
+    /**
+    @param {T} startingValue
+    @public*/ constructor(startingValue)
+    {
+        super(startingValue);
+    }
+
+    /**
+    @public @override*/ get value() { return this.get() }
+    /**
+    @public @override*/ set value(value) { this.set(value) }
+
+    /**
+    @param {Readonly<T>} value
+    @public*/ set(value)
+    {
+        const oldValue = this.storedValue;
+        this.storedValue = value;
+
+        for (const listener of this.listeners)
+            listener({
+                oldValue: oldValue,
+                newValue: value,
+            });
     }
 }
 
@@ -92,88 +109,31 @@
 
 /**
 @template T
-*/ export class LoudArray
+*/ export class ReadonlyLoudArray
 {
     /**
     @param {T[]} startingElements
-    @public*/ constructor(...startingElements)
+    @protected*/ constructor(...startingElements)
     {
         /**
         @type {T[]}
-        @private*/ this._array = startingElements;
+        @protected*/ this.storedArray = startingElements;
         /**
         @type {LoudArrayListener<T>[]}
-        @private*/ this._listeners = [];
+        @protected*/ this.listeners = [];
     }
-    
+
     /**
     @public*/ get value() { return this.get() }
-    /**
-    @public*/ set value(value) { this.set(value) }
 
     /**
     @returns {readonly T[]}
-    @public*/ get() { return this._array }
-    /**
-    @param {readonly T[]} elements
-    @public*/ set(elements)
-    {
-        const oldElements = this._array;
-        this._array = [...elements];
+    @public*/ get() { return this.storedArray }
 
-        for (const listener of this._listeners)
-            listener({
-                index: 0,
-                array: this._array,
-                method: oldElements.length === elements.length ? "replace" : "splice",
-                oldValues: oldElements,
-                newValues: elements,
-            });
-    }
-    
     /**
     @param {number} index
     @returns {T}
-    @public*/ getAt(index) { return this._array[index < 0 ? index + this._array.length : index] }
-    /**
-    @param {number} index
-    @param {T} value
-    @public*/ setAt(index, value)
-    {
-        if (index < 0)
-            index += this._array.length;
-
-        if (index < 0)
-            return;
-
-        if (index >= this._array.length)
-        {
-            this._array[index] = value;
-    
-            for (const listener of this._listeners)
-                listener({
-                    index: index,
-                    array: this._array,
-                    method: "insert",
-                    oldValues: null,
-                    newValues: [value],
-                });
-        }
-        else
-        {
-            const oldValue = this._array[index]; 
-            this._array[index] = value;
-    
-            for (const listener of this._listeners)
-                listener({
-                    index: index,
-                    array: this._array,
-                    method: "replace",
-                    oldValues: [oldValue],
-                    newValues: [value],
-                });
-        }
-    }
+    @public*/ getAt(index) { return this.storedArray[index < 0 ? index + this.storedArray.length : index] }
 
     /**
     @param {number} index
@@ -182,21 +142,131 @@
 
     /**
     @type {number}
-    @public*/ get length() { return this._array.length }
+    @public*/ get length() { return this.storedArray.length }
+
+    /**
+    @param {(T | ConcatArray<T>)[]} items
+    @returns {T[]}
+    @public*/ concat(...items) { return this.storedArray.concat(...items) }
+
+    /**
+    @param {string} [separator]
+    @returns {string}
+    @public*/ join(separator) { return this.storedArray.join(separator) }
+
+    /**
+    @param {number} start 
+    @param {number} end 
+    @returns {T[]}
+    @public*/ slice(start, end) { return this.storedArray.slice(start, end) }
+
+    /**
+    @returns {ArrayIterator<T>}
+    @public*/ [Symbol.iterator]() { return this.storedArray[Symbol.iterator]() }
+
+    /**
+    @param {LoudArrayListener<T>} listener
+    @public*/ addListener(listener)
+    {
+        this.listeners.push(listener);
+    }
+    /**
+    @param {LoudArrayListener<T>} listener
+    @public*/ removeListener(listener)
+    {
+        const index = this.listeners.indexOf(listener);
+        if (index >= 0)
+            this.listeners.splice(index, 1);
+    }
+}
+
+/**
+@extends {ReadonlyLoudArray<T>}
+@template T
+*/ export class LoudArray extends ReadonlyLoudArray
+{
+    /**
+    @param {T[]} startingElements
+    @public*/ constructor(...startingElements)
+    {
+        super(...startingElements);
+    }
+
+    /**
+    @public @override*/ get value() { return this.get() }
+    /**
+    @public @override*/ set value(value) { this.set(value) }
+
+    /**
+    @param {readonly T[]} elements
+    @public*/ set(elements)
+    {
+        const oldElements = this.storedArray;
+        this.storedArray = [...elements];
+
+        for (const listener of this.listeners)
+            listener({
+                index: 0,
+                array: this.storedArray,
+                method: oldElements.length === elements.length ? "replace" : "splice",
+                oldValues: oldElements,
+                newValues: elements,
+            });
+    }
+
+    /**
+    @param {number} index
+    @param {T} value
+    @public*/ setAt(index, value)
+    {
+        if (index < 0)
+            index += this.storedArray.length;
+
+        if (index < 0)
+            return;
+
+        if (index >= this.storedArray.length)
+        {
+            this.storedArray[index] = value;
+
+            for (const listener of this.listeners)
+                listener({
+                    index: index,
+                    array: this.storedArray,
+                    method: "insert",
+                    oldValues: null,
+                    newValues: [value],
+                });
+        }
+        else
+        {
+            const oldValue = this.storedArray[index]; 
+            this.storedArray[index] = value;
+
+            for (const listener of this.listeners)
+                listener({
+                    index: index,
+                    array: this.storedArray,
+                    method: "replace",
+                    oldValues: [oldValue],
+                    newValues: [value],
+                });
+        }
+    }
 
     /**
     @returns {T | undefined}
     @public*/ pop()
     {
-        if (this._array.length <= 0)
+        if (this.storedArray.length <= 0)
             return undefined;
 
-        const oldValue = /** @type {T} */(this._array.pop());
+        const oldValue = /** @type {T} */(this.storedArray.pop());
 
-        for (const listener of this._listeners)
+        for (const listener of this.listeners)
             listener({
-                index: this._array.length,
-                array: this._array,
+                index: this.storedArray.length,
+                array: this.storedArray,
                 method: "remove",
                 oldValues: [oldValue],
                 newValues: null,
@@ -210,13 +280,13 @@
     @returns {number}
     @public*/ push(...items)
     {
-        const insertIndex = this._array.length;
-        const result = this._array.push(...items);
+        const insertIndex = this.storedArray.length;
+        const result = this.storedArray.push(...items);
 
-        for (const listener of this._listeners)
+        for (const listener of this.listeners)
             listener({
                 index: insertIndex,
-                array: this._array,
+                array: this.storedArray,
                 method: "insert",
                 oldValues: null,
                 newValues: items,
@@ -226,47 +296,37 @@
     }
 
     /**
-    @param {(T | ConcatArray<T>)[]} items
-    @returns {T[]}
-    @public*/ concat(...items) { return this._array.concat(...items) }
-
-    /**
-    @param {string} [separator]
-    @returns {string}
-    @public*/ join(separator) { return this._array.join(separator) }
-
-    /**
     @returns {T[]}
     @public*/ reverse()
     {
-        const oldArray = this._array;
-        this._array = [...this._array].reverse();
+        const oldArray = this.storedArray;
+        this.storedArray = [...this.storedArray].reverse();
 
-        for (const listener of this._listeners)
+        for (const listener of this.listeners)
             listener({
                 index: 0,
-                array: this._array,
+                array: this.storedArray,
                 method: "replace",
                 oldValues: oldArray,
-                newValues: this._array,
+                newValues: this.storedArray,
             });
 
-        return this._array;
+        return this.storedArray;
     }
 
     /**
     @returns {T | undefined}
     @public*/ shift()
     {
-        if (this._array.length <= 0)
+        if (this.storedArray.length <= 0)
             return undefined;
 
-        const oldValue = /** @type {T} */(this._array.shift());
+        const oldValue = /** @type {T} */(this.storedArray.shift());
 
-        for (const listener of this._listeners)
+        for (const listener of this.listeners)
             listener({
                 index: 0,
-                array: this._array,
+                array: this.storedArray,
                 method: "remove",
                 oldValues: [oldValue],
                 newValues: null,
@@ -276,26 +336,20 @@
     }
 
     /**
-    @param {number} start 
-    @param {number} end 
-    @returns {T[]}
-    @public*/ slice(start, end) { return this._array.slice(start, end) }
-
-    /**
     @param {(a: T, b: T) => number} [compareFn]
     @returns {this}
     @public*/ sort(compareFn)
     {
-        const oldArray = this._array;
-        this._array = [...this._array].sort(compareFn);
+        const oldArray = this.storedArray;
+        this.storedArray = [...this.storedArray].sort(compareFn);
 
-        for (const listener of this._listeners)
+        for (const listener of this.listeners)
             listener({
                 index: 0,
-                array: this._array,
+                array: this.storedArray,
                 method: "replace",
                 oldValues: oldArray,
-                newValues: this._array,
+                newValues: this.storedArray,
             });
 
         return this;
@@ -306,22 +360,22 @@
     @param {number} deleteCount
     @param {T[]} rest
     @returns {T[]}
-    @public*/ splice(start, deleteCount = this._array.length - start, ...rest)
+    @public*/ splice(start, deleteCount = this.storedArray.length - start, ...rest)
     {
         if (start < 0)
-            start += this._array.length;
+            start += this.storedArray.length;
 
         if (start < 0)
             start = 0;
-        else if (start > this._array.length)
-            start = this._array.length;
+        else if (start > this.storedArray.length)
+            start = this.storedArray.length;
 
-        const removedElements = this._array.splice(start, deleteCount, ...rest);
-        
-        for (const listener of this._listeners)
+        const removedElements = this.storedArray.splice(start, deleteCount, ...rest);
+
+        for (const listener of this.listeners)
             listener({
                 index: start,
-                array: this._array,
+                array: this.storedArray,
                 method: removedElements.length === rest.length ? "replace" : "splice",
                 oldValues: removedElements,
                 newValues: rest,
@@ -335,36 +389,17 @@
     @returns {number}
     @public*/ unshift(...items)
     {
-        const result = this._array.unshift(...items);
+        const result = this.storedArray.unshift(...items);
 
-        for (const listener of this._listeners)
+        for (const listener of this.listeners)
             listener({
                 index: 0,
-                array: this._array,
+                array: this.storedArray,
                 method: "insert",
                 oldValues: null,
                 newValues: items,
             });
 
         return result;
-    }
-
-    /**
-    @returns {ArrayIterator<T>}
-    @public*/ [Symbol.iterator]() { return this._array[Symbol.iterator]() }
-
-    /**
-    @param {LoudArrayListener<T>} listener
-    @public*/ addListener(listener)
-    {
-        this._listeners.push(listener);
-    }
-    /**
-    @param {LoudArrayListener<T>} listener
-    @public*/ removeListener(listener)
-    {
-        const index = this._listeners.indexOf(listener);
-        if (index >= 0)
-            this._listeners.splice(index, 1);
     }
 }
