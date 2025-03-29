@@ -1,12 +1,11 @@
 {
-    "compilerOptions":
-    {
-        "checkJs": true,
-        "strictNullChecks": true,
-        "noImplicitAny": true,
-        "noImplicitOverride": true,
-        "noImplicitReturns": true,
-        "noImplicitThis": true,
-        "target": "ES2024",
-    }
+  "compilerOptions": {
+    "checkJs": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "target": "ES2024",
+  }
 }

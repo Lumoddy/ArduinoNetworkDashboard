@@ -1,0 +1,12 @@
+{
+  "name": "arduinonetworkdashboard",
+  "version": "1.0.0",
+  "main": "",
+  "scripts": {
+    "run": "npx serve"
+  },
+  "keywords": [],
+  "author": "MrJaydanOz",
+  "license": "ISC",
+  "description": ""
+}
