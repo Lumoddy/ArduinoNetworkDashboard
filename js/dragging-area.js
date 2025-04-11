@@ -1,3 +1,4 @@
+import { DraggableItem } from "./draggable-item.js";
 import { Loud } from "./loud.js";
 
 /**
@@ -51,77 +52,100 @@ import { Loud } from "./loud.js";
 
         /**
         @type {{ [I in number]: { x: number, y: number } } & { count: number }}
-        @private*/ this._pointerLastPositions = { count: 0 };
+        @private*/ this._draggingStartPoints = { count: 0 };
+
+        /**
+        @type {{ [I in number]: { x: number, y: number, item: DraggableItem } } & { count: number }}
+        @private*/ this._dragging = { count: 0 };
 
         this.addEventListener("pointerdown", (e) =>
         {
-            if (e.target !== this)
-                return;
-
-            const style = window.getComputedStyle(this);
-
-            if (!(e.pointerId in this._pointerLastPositions))
+            if (e.target === this)
             {
-                if (this._pointerLastPositions.count === 0)
-                    this.setAttribute("dragging", "");
+                const style = window.getComputedStyle(this);
 
-                ++this._pointerLastPositions.count;
-                this.setPointerCapture(e.pointerId);
+                if (!(e.pointerId in this._draggingStartPoints))
+                {
+                    if (this._draggingStartPoints.count === 0)
+                        this.setAttribute("dragging", "");
+
+                    ++this._draggingStartPoints.count;
+                    this.setPointerCapture(e.pointerId);
+                }
+
+                this._draggingStartPoints[e.pointerId] = this.clientToViewPoint(
+                    parseFloat(style.paddingLeft) + e.offsetX,
+                    parseFloat(style.paddingTop) + e.offsetY);
             }
+            else if (e.target instanceof DraggableItem && e.target.parentNode === this)
+            {
+                const style = window.getComputedStyle(this);
 
-            this._pointerLastPositions[e.pointerId] = this.clientToViewPoint(
-                parseFloat(style.paddingLeft) + e.offsetX,
-                parseFloat(style.paddingTop) + e.offsetY);
+                if (!(e.pointerId in this._draggingStartPoints))
+                {
+                    if (this._draggingStartPoints.count === 0)
+                        this.setAttribute("dragging", "");
+
+                    ++this._draggingStartPoints.count;
+                    this.setPointerCapture(e.pointerId);
+                }
+
+                this._draggingStartPoints[e.pointerId] =
+                {
+                    x: parseFloat(style.paddingLeft) + e.offsetX,
+                    y: parseFloat(style.paddingTop) + e.offsetY,
+                }
+            }
         });
 
         this.addEventListener("pointerup", (e) =>
         {
-            if (e.pointerId in this._pointerLastPositions)
+            if (e.pointerId in this._draggingStartPoints)
             {
-                --this._pointerLastPositions.count;
+                --this._draggingStartPoints.count;
 
-                if (this._pointerLastPositions.count === 0)
+                if (this._draggingStartPoints.count === 0)
                     this.removeAttribute("dragging");
 
                 this.releasePointerCapture(e.pointerId);
 
-                delete this._pointerLastPositions[e.pointerId];
+                delete this._draggingStartPoints[e.pointerId];
             }
         });
 
         this.addEventListener("pointercancel", (e) =>
         {
-            if (e.pointerId in this._pointerLastPositions)
+            if (e.pointerId in this._draggingStartPoints)
             {
-                --this._pointerLastPositions.count;
+                --this._draggingStartPoints.count;
 
-                if (this._pointerLastPositions.count === 0)
+                if (this._draggingStartPoints.count === 0)
                     this.removeAttribute("dragging");
 
                 this.releasePointerCapture(e.pointerId);
 
-                delete this._pointerLastPositions[e.pointerId];
+                delete this._draggingStartPoints[e.pointerId];
             }
         });
 
         this.addEventListener("pointermove", (e) =>
         {
-            if (!(e.pointerId in this._pointerLastPositions))
-                return;
+            if (e.pointerId in this._draggingStartPoints)
+            {
+                const style = window.getComputedStyle(this);
 
-            const style = window.getComputedStyle(this);
+                const lastPosition = this._draggingStartPoints[e.pointerId];
+                const currentPosition = this.clientToViewPoint(
+                    parseFloat(style.paddingLeft) + e.offsetX,
+                    parseFloat(style.paddingTop) + e.offsetY);
 
-            const lastPosition = this._pointerLastPositions[e.pointerId];
-            const currentPosition = this.clientToViewPoint(
-                parseFloat(style.paddingLeft) + e.offsetX,
-                parseFloat(style.paddingTop) + e.offsetY);
+                this._viewCenter.value = {
+                    x: this._viewCenter.value.x + (lastPosition.x - currentPosition.x),
+                    y: this._viewCenter.value.y + (lastPosition.y - currentPosition.y),
+                };
 
-            this._viewCenter.value = {
-                x: this._viewCenter.value.x + (lastPosition.x - currentPosition.x),
-                y: this._viewCenter.value.y + (lastPosition.y - currentPosition.y),
-            };
-
-            console.log(this._viewCenter.value.x, "+", "(", currentPosition.x, "-", lastPosition.x, ")", "=", this._viewCenter.value.x + (currentPosition.x - lastPosition.x));
+                console.log(this._viewCenter.value.x, "+", "(", currentPosition.x, "-", lastPosition.x, ")", "=", this._viewCenter.value.x + (currentPosition.x - lastPosition.x));
+            }
         });
     }
 

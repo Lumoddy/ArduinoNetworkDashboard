@@ -3,6 +3,9 @@
 @property --view-zoom { syntax: "<number>"; inherits: true; initial-value: 1 }
 @property --view-scale { syntax: "<length>"; inherits: true }
 
+@property --pos-x { syntax: "<number>"; inherits: false; initial-value: 0 }
+@property --pos-y { syntax: "<number>"; inherits: false; initial-value: 0 }
+
 dragging-area
 {
     display: block;
@@ -18,8 +21,8 @@ dragging-area
 
     & > *, & > svg > *
     {
-        left: calc(50% - (var(--view-scale) * var(--view-center-x)));
-        top: calc(50% - (var(--view-scale) * var(--view-center-y)));
+        left: calc(50% + (var(--view-scale) * (var(--pos-x) - var(--view-center-x))));
+        top: calc(50% + (var(--view-scale) * (var(--pos-y) - var(--view-center-y))));
         position: absolute;
     }
     & > svg
