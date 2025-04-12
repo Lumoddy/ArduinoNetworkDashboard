@@ -82,9 +82,29 @@ public:
         for (size_t i = index + 1; i < _length; i++)
             _begin[i - 1] = _begin[i];
 
-        _begin[_length - 1].~_T();
-
         _length--;
+        _begin[_length].~_T();
+
+        return true;
+    }
+
+    bool remove_range(const size_t start, const size_t count)
+    {
+        if (start >= _length || count == 0)
+            return false;
+
+        size_t end = start + count;
+
+        if (end > _length)
+            end = _length;
+
+        for (size_t i = end; i < _length; i++)
+            _begin[i - count] = _begin[i];
+
+        for (size_t i = _length - count; i < _length; i++)
+            _begin[i].~_T();
+
+        _length -= count;
 
         return true;
     }
