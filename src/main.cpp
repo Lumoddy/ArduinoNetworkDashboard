@@ -1,11 +1,22 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#include "result.h"
+#include <SoftwareSerial.h>
 
-void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+#include "board_setup.cpp"
+
+void setup()
+{
+    for (byte i = 0; i < softwareSerialCount; i++)
+        softwareSerials[i].begin(baudRate);
+
+    for (byte i = 0; i < inputPinCount; i++)
+        pinMode(inputPins[i], INPUT);
+
+    for (byte i = 0; i < outputPinCount; i++)
+        pinMode(outputPins[i], OUTPUT);
+
+    pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void loop() {
