@@ -1,3 +1,6 @@
+#ifndef SHARED_H
+#define SHARED_H
+
 template<typename _T>
 struct shared
 {
@@ -43,11 +46,11 @@ public:
         _pointer->count++;
     }
 
-    bool operator==(const shared<_T>& other) const { return _pointer == other._pointer }
-    bool operator==(const _T*const other) const { return &_pointer->value == other }
+    bool operator==(const shared<_T>& other) const { return _pointer == other._pointer; }
+    bool operator==(const _T*const other) const { return &_pointer->value == other; }
 
-    bool operator!=(const shared<_T>& other) const { return !(this == other) }
-    bool operator!=(const _T*const other) const { return !(this == other) }
+    bool operator!=(const shared<_T>& other) const { return !(this == other); }
+    bool operator!=(const _T*const other) const { return !(this == other); }
 
     [[nodiscard]] _T& operator->() { return operator*(); }
     [[nodiscard]] const _T& operator->() const { return operator*(); }
@@ -55,3 +58,5 @@ public:
     [[nodiscard]] _T& operator*() { return _pointer->value; }
     [[nodiscard]] const _T& operator*() const { return _pointer->value; }
 };
+
+#endif
