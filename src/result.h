@@ -1,4 +1,7 @@
-typedef unsigned char byte;
+#ifndef RESULT_H
+#define RESULT_H
+
+#include <stddef.h>
 
 template<typename _E = byte>
 struct result_error
@@ -7,7 +10,7 @@ public:
     const _E error;
 
 public:
-    result_error(const _E& error) : error(error) { }
+    constexpr result_error(const _E& error) : error(error) { }
 };
 
 template<typename _T, typename _E = byte>
@@ -89,3 +92,5 @@ public:
     [[nodiscard]] _T& operator*() { return *_as<_T>(); }
     [[nodiscard]] const _T& operator*() const { return *_as<_T>(); }
 };
+
+#endif
