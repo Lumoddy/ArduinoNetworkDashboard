@@ -1,3 +1,6 @@
+#ifndef LIST_H
+#define LIST_H
+
 #include "result.h"
 #include <stddef.h>
 
@@ -167,3 +170,5 @@ private:
         return true;
     }
 };
+
+#endif
