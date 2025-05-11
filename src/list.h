@@ -1,173 +1,296 @@
-#ifndef LIST_H
-#define LIST_H
+#ifndef list_h
+#define list_h
 
-#include "result.h"
-#include <stddef.h>
+#include <stdlib.h>
+#include "./result.h"
+#include "./index.h"
 
 template<typename _T>
-class list
+class List
 {
 private:
-    static constexpr size_t _MIN_CAPACITY = 4;
-
-private:
-    size_t _capacity;
     size_t _length;
-    _T* _begin;
+    size_t _capacity;
+    _T *_begin;
 
 public:
-    list() noexcept : list(_MIN_CAPACITY) { }
-    list(const size_t capacity) noexcept : _length(0)
+    constexpr List() noexcept : _length(0), _capacity(0), _begin(nullptr) { }
+    List(const size_t capacity) noexcept : _length(0), _capacity(capacity), _begin(static_cast<_T *>(malloc(_capacity * sizeof(_T)))) { }
+    List(const List<_T> &original) noexcept :
+        _length(original._length),
+        _capacity(_length),
+        _begin(static_cast<_T *>(malloc(_length * sizeof(_T))))
     {
-        _capacity = capacity;
-        _begin = _capacity == 0 ? nullptr : new _T[_capacity];
-    }
-    list(const size_t length, _T (*const factory)(const size_t)) noexcept : list(length < _MIN_CAPACITY ? _MIN_CAPACITY : length)
-    {
-        _length = length;
+        _T *fromIt = original._begin;
+        _T *toIt = _begin;
 
-        for (size_t i = 0; i < length; i++)
-            _begin[i] = factory(i);
+        const _T *const fromEnd = fromIt + _length;
+        for (; fromIt < fromEnd; ++fromIt, ++toIt )
+            new (toIt) _T(*fromIt);
     }
-    list(const list& original) noexcept : list(original._length < _MIN_CAPACITY ? _MIN_CAPACITY : original._length)
-    {
-        _length = original._length;
+    constexpr List(List<_T> &&original) noexcept :
+        _length(original._length),
+        _capacity(original._capacity),
+        _begin(original._begin) { }
 
-        for (size_t i = 0; i < original._length; i++)
-            _begin[i] = original._begin[i];
-    }
-    list(const list& original, _T (*const map)(const _T&)) noexcept : list(original._length < _MIN_CAPACITY ? _MIN_CAPACITY : original._length)
+    ~List()
     {
-        _length = original._length;
-
-        for (size_t i = 0; i < original._length; i++)
-            _begin[i] = map(original._begin[i]);
+        const _T *const itEnd = _begin + _length;
+        for (_T *it = _begin; it < itEnd; ++it )
+            it->~_T();
     }
 
-    size_t append(const _T& item)
+    static List<_T> of() noexcept { return List<_T>(); }
+    template<typename ..._TRest>
+    static List<_T> of(const _T &first, const _TRest &...rest) noexcept
     {
-        if (_length + 1 > _capacity)
-            _set_capacity(_capacity * 2);
+        constexpr size_t elementCount = 1 + sizeof...(rest);
 
-        _begin[_length] = item;
+        List<_T> result = List<_T>();
+        result._length = elementCount;
+        result._capacity = elementCount;
+        result._begin = static_cast<_T *>(malloc(elementCount * sizeof(_T)));
 
-        _length++;
+        _placeNewWithVaradic(result._begin, first, rest...);
 
-        return _length;
+        return result;
     }
-    size_t append(const list<_T>& list)
+    template<typename ..._TRest>
+    static List<_T> of(_T &&first, _TRest &&...rest) noexcept
     {
-        if (_length + list._length > _capacity)
+        constexpr size_t elementCount = 1 + sizeof...(rest);
+
+        List<_T> result = List<_T>();
+        result._length = elementCount;
+        result._capacity = elementCount;
+        result._begin = static_cast<_T *>(malloc(elementCount * sizeof(_T)));
+
+        _placeNewWithVaradic(result._begin, first, rest...);
+
+        return result;
+    }
+
+    void pushBack(const _T &item) noexcept
+    {
+        const size_t newLength = _length + 1;
+        if (newLength > _capacity)
+            setCapacity(_capacity == 0 ? 4 : _capacity * 2);
+
+        new (_begin + _length) _T(item);
+        _length = newLength;
+    }
+    void pushBack(_T &&item) noexcept
+    {
+        const size_t newLength = _length + 1;
+        if (newLength > _capacity)
+            setCapacity(_capacity == 0 ? 4 : _capacity * 2);
+
+        new (_begin + _length) _T(item);
+        _length = newLength;
+    }
+
+    /// @returns
+    /// `ErrorTypes::InvalidOperation`
+    Result<_T> popBack() noexcept
+    {
+        if (_length == 0)
+            return bad ErrorTypes::InvalidOperation;
+
+        --_length;
+
+        _T result = _begin[_length];
+        return result;
+    }
+
+    void setCapacity(const size_t capacity) noexcept
+    {
+        if (_capacity == capacity)
+            return;
+
+        if (capacity == 0)
         {
-            size_t newCapacity = _capacity;
+            const _T *const itEnd = _begin + _length;
 
-            while (newCapacity < _length + list._length)
-                newCapacity *= 2;
+            for (_T *it = _begin; it < itEnd; ++it)
+                it->~_T();
 
-            _set_capacity(newCapacity);
+            free(_begin);
+            _begin = nullptr;
+            _capacity = 0;
+
+            _length = 0;
         }
+        else if (_capacity == 0)
+        {
+            _begin = static_cast<_T *>(malloc(capacity * sizeof(_T)));
+            _capacity = capacity;
+        }
+        else
+        {
+            _T *const newBegin = static_cast<_T *>(malloc(capacity * sizeof(_T)));
 
-        for (size_t i = 0; i < list._length; i++)
-            _begin[_length + i] = list._begin[i];
+            _T *fromIt = _begin;
+            _T *toIt = newBegin;
 
-        _length += list._length;
+            const _T *fromEndCopy;
+            const _T *fromEndDestruct;
 
-        return _length;
+            if (capacity < _length)
+            {
+                fromEndCopy = fromIt + capacity;
+                fromEndDestruct = fromIt + _length;
+                _length = capacity;
+            }
+            else
+            {
+                fromEndCopy = fromIt + _length;
+                fromEndDestruct = fromEndCopy;
+            }
+
+            for (; fromIt < fromEndCopy; ++fromIt, ++toIt)
+            {
+                new (toIt) _T(*fromIt);
+                fromIt->~_T();
+            }
+
+            for (; fromIt < fromEndDestruct; ++fromIt)
+                fromIt->~_T();
+
+            free(_begin);
+            _begin = newBegin;
+            _capacity = capacity;
+        }
     }
 
-    bool remove_at(const size_t index)
+    List<_T> &operator=(const List<_T> &other) &noexcept
+    {
+        if (other._length > _capacity)
+        {
+            if (_begin != nullptr)
+            {
+                const _T *const itEnd = _begin + _length;
+
+                for (_T *it = _begin; it < itEnd; ++it)
+                    it->~_T();
+
+                free(_begin);
+                _begin = nullptr;
+            }
+
+            _begin = static_cast<_T *>(malloc(other._length * sizeof(_T)));
+
+            _T *fromIt = other._begin;
+            _T *toIt = _begin;
+
+            const _T *const fromEnd = fromIt + other._length;
+            for (; fromIt < fromEnd; ++fromIt, ++toIt )
+                new (toIt) _T(*fromIt);
+        }
+        else
+        {
+            _T *fromIt = other._begin;
+            _T *toIt = _begin;
+
+            const _T *const fromEndCopy = fromIt + other._length;
+            const _T *const fromEndDestruct = fromIt + _length;
+            const _T *const fromEndAssign = fromEndCopy < fromEndDestruct ? fromEndCopy : fromEndDestruct;
+
+            for (; fromIt < fromEndAssign; ++fromIt, ++toIt)
+                *toIt = *fromIt;
+
+            for (; fromIt < fromEndCopy; ++fromIt, ++toIt)
+                new (toIt) _T(*fromIt);
+
+            for (; fromIt < fromEndDestruct; ++fromIt, ++toIt)
+                toIt->~_T();
+        }
+    }
+    List<_T> &operator=(List<_T> &&other) &noexcept
+    {
+        _length = other._length;
+        _capacity = other._capacity;
+        _begin = other._begin;
+    }
+
+    /// @returns
+    /// `ErrorTypes::IndexOutOfRange`
+    Result<_T &> at(size_t index) noexcept
     {
         if (index >= _length)
-            return false;
+            return bad ErrorTypes::IndexOutOfRange;
 
-        for (size_t i = index + 1; i < _length; i++)
-            _begin[i - 1] = _begin[i];
-
-        _length--;
-        _begin[_length].~_T();
-
-        return true;
+        return _begin[index];
     }
-
-    bool remove_range(const size_t start, const size_t count)
+    /// @returns
+    /// `ErrorTypes::IndexOutOfRange`
+    Result<const _T &> at(size_t index) const noexcept
     {
-        if (start >= _length || count == 0)
-            return false;
+        if (index >= _length)
+            return bad ErrorTypes::IndexOutOfRange;
 
-        size_t end = start + count;
-
-        if (end > _length)
-            end = _length;
-
-        for (size_t i = end; i < _length; i++)
-            _begin[i - count] = _begin[i];
-
-        for (size_t i = _length - count; i < _length; i++)
-            _begin[i].~_T();
-
-        _length -= count;
-
-        return true;
+        return _begin[index];
     }
-
-    void clear()
+    /// @returns
+    /// `ErrorTypes::IndexOutOfRange`
+    Result<_T &> at(Index index) noexcept
     {
-        for (size_t i = _length; i >= 0; i--)
-            _begin[i].~_T();
+        if (index.index >= _length)
+            return bad ErrorTypes::IndexOutOfRange;
 
-        _length = 0;
+        return index.fromEnd ? _begin[_length - index.index - 1] : _begin[index.index];
     }
-
-    [[nodiscard]] result<_T&> find(const bool (*const match)(const _T&)) const
+    /// @returns
+    /// `ErrorTypes::IndexOutOfRange`
+    Result<const _T &> at(Index index) const noexcept
     {
-        for (size_t i = 0; i < _length; i++)
-            if (match(_begin[i]))
-                return _begin[i];
+        if (index.index >= _length)
+            return bad ErrorTypes::IndexOutOfRange;
 
-        return result_error<>(0);
+        return index.fromEnd ? _begin[_length - index.index - 1] : _begin[index.index];
     }
 
-    [[nodiscard]] result<size_t> find_index(const bool (*const match)(const _T&)) const
+    _T &operator[](size_t index) noexcept
     {
-        for (size_t i = 0; i < _length; i++)
-            if (match(_begin[i]))
-                return i;
+        if (index >= _length)
+            fail(ErrorTypes::IndexOutOfRange);
 
-        return result_error<>(0);
+        return _begin[index];
     }
+    const _T &operator[](size_t index) const noexcept
+    {
+        if (index >= _length)
+            fail(ErrorTypes::IndexOutOfRange);
 
-    [[nodiscard]] size_t length() const { return _length; }
-    [[nodiscard]] size_t capacity() const { return _capacity; }
+        return _begin[index];
+    }
+    _T &operator[](Index index) noexcept
+    {
+        if (index.index >= _length)
+            fail(ErrorTypes::IndexOutOfRange);
 
-    [[nodiscard]] _T* begin() { return _begin; }
-    [[nodiscard]] const _T* begin() const { return _begin; }
+        return index.fromEnd ? _begin[_length - index.index - 1] : _begin[index.index];
+    }
+    const _T &operator[](Index index) const noexcept
+    {
+        if (index.index >= _length)
+            fail(ErrorTypes::IndexOutOfRange);
 
-    [[nodiscard]] _T* end() { return _begin + _length; }
-    [[nodiscard]] const _T* end() const { return _begin + _length; }
-
-    [[nodiscard]] result<_T&> at(const size_t index) { return index >= _length ? result_error<>(0) : operator[](index); }
-    [[nodiscard]] result<const _T&> at(const size_t index) const { return index >= _length ? result_error<>(0) : operator[](index); }
-
-    [[nodiscard]] _T& operator[](const size_t index) { return _begin[index]; }
-    [[nodiscard]] const _T& operator[](const size_t index) const { return _begin[index]; }
+        return index.fromEnd ? _begin[_length - index.index - 1] : _begin[index.index];
+    }
 
 private:
-    bool _set_capacity(const size_t capacity)
+    inline static void _placeNewWithVaradic(_T *const at) noexcept { }
+    template<typename ..._TRest>
+    inline static void _placeNewWithVaradic(_T *const at, const _T &first, const _TRest &...rest) noexcept
     {
-        if (capacity == _capacity)
-            return false;
-
-        _T* newBegin = new _T[capacity];
-        _capacity = capacity;
-        for (size_t i = 0; i < _length; i++)
-            newBegin[i] = _begin[i];
-
-        if (_begin != nullptr)
-            delete _begin;
-
-        _begin = newBegin;
-
-        return true;
+        new (at) _T(first);
+        _placeNewWithVaradic(at + 1, rest...);
+    }
+    template<typename ..._TRest>
+    inline static void _placeNewWithVaradic(_T *const at, _T &&first, _TRest &&...rest) noexcept
+    {
+        new (at) _T(first);
+        _placeNewWithVaradic(at + 1, rest...);
     }
 };
 

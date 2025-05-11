@@ -1,62 +1,84 @@
-#ifndef SHARED_H
-#define SHARED_H
+#ifndef shared_h
+#define shared_h
+
+#include "./optional.h"
 
 template<typename _T>
-struct shared
+class Shared
 {
 private:
-    struct _data
+    struct _Heap
     {
     public:
-        unsigned short count;
+        size_t count;
         _T value;
 
     public:
-        _data(const _T& value) : count(1), value(value) { }
+        _Heap(const size_t count, const _T &value) : count(count), value(value) { }
+        _Heap(const size_t count, _T &&value) : count(count), value(value) { }
+
+        ~_Heap()
+        {
+            value.~_T();
+        }
     };
 
 private:
-    _data* _pointer;
+    _Heap *_heap;
 
 public:
-    shared(const _T& value)
+    Shared() noexcept : _heap(nullptr) { }
+    Shared(const _T &value) noexcept : _heap(new _Heap(1, value)) { }
+    Shared(_T &&value) noexcept : _heap(new _Heap(1, value)) { }
+    Shared(const Shared<_T> &original) noexcept : _heap(original._heap)
     {
-        _pointer = new _data(value);
+        if (_heap != nullptr)
+            ++_heap->count;
     }
-    shared(const shared<_T>& value)
+    Shared(Shared<_T> &&original) noexcept : _heap(original._heap)
     {
-        _pointer = value._pointer;
-        _pointer->count++;
-    }
-    ~shared()
-    {
-        if (--_pointer->count == 0)
-            delete _pointer;
+        original._heap = nullptr;
     }
 
-    shared<_T>& operator=(const shared<_T>& other)
+    ~Shared() noexcept
     {
-        if (other._pointer == _pointer)
-            return;
-
-        if (--_pointer->count == 0)
-            delete _pointer;
-
-        _pointer = value._pointer;
-        _pointer->count++;
+        if (_heap != nullptr && --_heap->count == 0)
+            delete _heap;
     }
 
-    bool operator==(const shared<_T>& other) const { return _pointer == other._pointer; }
-    bool operator==(const _T*const other) const { return &_pointer->value == other; }
+    Shared<_T> &operator=(const Shared<_T> &other) noexcept
+    {
+        if (_heap != nullptr && --_heap->count == 0)
+            delete _heap;
 
-    bool operator!=(const shared<_T>& other) const { return !(this == other); }
-    bool operator!=(const _T*const other) const { return !(this == other); }
+        _heap = other._heap;
+        if (_heap != nullptr)
+            ++_heap->count;
 
-    [[nodiscard]] _T& operator->() { return operator*(); }
-    [[nodiscard]] const _T& operator->() const { return operator*(); }
+        return *this;
+    }
+    Shared<_T> &operator=(Shared<_T> &&other) noexcept
+    {
+        if (_heap != nullptr && --_heap->count == 0)
+            delete _heap;
 
-    [[nodiscard]] _T& operator*() { return _pointer->value; }
-    [[nodiscard]] const _T& operator*() const { return _pointer->value; }
+        _heap = other._heap;
+        other._heap = nullptr;
+
+        return *this;
+    }
+
+    bool operator==(NoneKeyword other) const noexcept { return _heap == nullptr; }
+    bool operator!=(NoneKeyword other) const noexcept { return _heap != nullptr; }
+
+    [[nodiscard]] _T &operator*() noexcept { return _heap->value; }
+    [[nodiscard]] const _T &operator*() const noexcept { return _heap->value; }
+
+    [[nodiscard]] _T *operator->() noexcept { return &_heap->value; }
+    [[nodiscard]] const _T *operator->() const noexcept { return &_heap->value; }
+
+    [[nodiscard]] bool operator!() const noexcept { return _heap == nullptr; }
+    [[nodiscard]] operator bool() const noexcept { return _heap != nullptr; }
 };
 
 #endif
