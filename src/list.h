@@ -51,7 +51,7 @@ public:
         result._capacity = elementCount;
         result._begin = static_cast<_T *>(malloc(elementCount * sizeof(_T)));
 
-        _placeNewWithVaradic(result._begin, first, rest...);
+        _placeNewWithVariadic(result._begin, first, rest...);
 
         return result;
     }
@@ -65,9 +65,16 @@ public:
         result._capacity = elementCount;
         result._begin = static_cast<_T *>(malloc(elementCount * sizeof(_T)));
 
-        _placeNewWithVaradic(result._begin, first, rest...);
+        _placeNewWithVariadic(result._begin, first, rest...);
 
         return result;
+    }
+    template<typename _TIterable>
+    static List<_T> from(const _TIterable& iterable) noexcept
+    {
+        List<_T> result = List<_T>();
+        for (const auto &item : iterable)
+            pushBack(item);
     }
 
     void pushBack(const _T &item) noexcept
@@ -234,19 +241,15 @@ public:
     /// `ErrorTypes::IndexOutOfRange`
     Result<_T &> at(Index index) noexcept
     {
-        if (index.index >= _length)
-            return bad ErrorTypes::IndexOutOfRange;
-
-        return index.fromEnd ? _begin[_length - index.index - 1] : _begin[index.index];
+        set_value_or_return(size_t actualIndex, index.actualIndex(_length));
+        return _begin[actualIndex];
     }
     /// @returns
     /// `ErrorTypes::IndexOutOfRange`
     Result<const _T &> at(Index index) const noexcept
     {
-        if (index.index >= _length)
-            return bad ErrorTypes::IndexOutOfRange;
-
-        return index.fromEnd ? _begin[_length - index.index - 1] : _begin[index.index];
+        set_value_or_return(size_t actualIndex, index.actualIndex(_length));
+        return _begin[actualIndex];
     }
 
     _T &operator[](size_t index) noexcept
@@ -279,18 +282,18 @@ public:
     }
 
 private:
-    inline static void _placeNewWithVaradic(_T *const at) noexcept { }
+    inline static void _placeNewWithVariadic(_T *const at) noexcept { }
     template<typename ..._TRest>
-    inline static void _placeNewWithVaradic(_T *const at, const _T &first, const _TRest &...rest) noexcept
+    inline static void _placeNewWithVariadic(_T *const at, const _T &first, const _TRest &...rest) noexcept
     {
         new (at) _T(first);
-        _placeNewWithVaradic(at + 1, rest...);
+        _placeNewWithVariadic(at + 1, rest...);
     }
     template<typename ..._TRest>
-    inline static void _placeNewWithVaradic(_T *const at, _T &&first, _TRest &&...rest) noexcept
+    inline static void _placeNewWithVariadic(_T *const at, _T &&first, _TRest &&...rest) noexcept
     {
         new (at) _T(first);
-        _placeNewWithVaradic(at + 1, rest...);
+        _placeNewWithVariadic(at + 1, rest...);
     }
 };
 

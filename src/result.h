@@ -4,6 +4,7 @@
 #include <new>
 #include "./types.h"
 #include "./error_types.h"
+#include "./def.h"
 
 template<typename _E = Error>
 struct ResultError
@@ -35,6 +36,18 @@ public:
 };
 
 #define bad BadKeyword()<<=
+
+#define set_value_or_return(variable, result) \
+    auto _mac_concat1(_result_, _mac_concat1(__LINE__, _)) = result; \
+    if (!_mac_concat1(_result_, _mac_concat1(__LINE__, _)))\
+        return ResultError<decltype(_mac_concat1(_result_, _mac_concat1(__LINE__, _)).error())>(_mac_concat1(_result_, _mac_concat1(__LINE__, _)).error());\
+    variable = _mac_concat1(_result_, _mac_concat1(__LINE__, _)).value()
+
+#define set_error_or_return(variable, result) \
+    auto _mac_concat1(_result_, _mac_concat1(__LINE__, _)) = result; \
+    if (_mac_concat1(_result_, _mac_concat1(__LINE__, _)))\
+        return _mac_concat1(_result_, _mac_concat1(__LINE__, _)).value();\
+    variable = _mac_concat1(_result_, _mac_concat1(__LINE__, _)).error()
 
 template<typename _T, typename _E = Error>
 struct Result
@@ -187,14 +200,78 @@ public:
         return *this;
     }
 
-    [[nodiscard]] _T &operator*() noexcept { return _value.value; }
-    [[nodiscard]] const _T &operator*() const noexcept { return _value.value; }
+    [[nodiscard]] _T &operator*() &noexcept
+    {
+        if (!_isValue)
+            fail(ErrorTypes::ResultNotValue);
 
-    [[nodiscard]] _T *operator->() noexcept { return &_value.value; }
-    [[nodiscard]] const _T *operator->() const noexcept { return &_value.value; }
+        return _value.value;
+    }
+    [[nodiscard]] const _T &operator*() const &noexcept
+    {
+        if (!_isValue)
+            fail(ErrorTypes::ResultNotValue);
 
-    [[nodiscard]] _E &operator~() noexcept { return _value.error; }
-    [[nodiscard]] const _E &operator~() const noexcept { return _value.error; }
+        return _value.value;
+    }
+    [[nodiscard]] _T &&operator*() &&noexcept
+    {
+        if (!_isValue)
+            fail(ErrorTypes::ResultNotValue);
+
+        return _value.value;
+    }
+    [[nodiscard]] const _T &&operator*() const &&noexcept
+    {
+        if (!_isValue)
+            fail(ErrorTypes::ResultNotValue);
+
+        return _value.value;
+    }
+
+    [[nodiscard]] _T *operator->() noexcept
+    {
+        if (!_isValue)
+            fail(ErrorTypes::ResultNotValue);
+
+        return &_value.value;
+    }
+    [[nodiscard]] const _T *operator->() const noexcept
+    {
+        if (!_isValue)
+            fail(ErrorTypes::ResultNotValue);
+
+        return &_value.value;
+    }
+
+    [[nodiscard]] _E &operator~() &noexcept
+    {
+        if (_isValue)
+            fail(ErrorTypes::ResultNotError);
+
+        return _value.error;
+    }
+    [[nodiscard]] const _E &operator~() const &noexcept
+    {
+        if (_isValue)
+            fail(ErrorTypes::ResultNotError);
+
+        return _value.error;
+    }
+    [[nodiscard]] _E &&operator~() &&noexcept
+    {
+        if (_isValue)
+            fail(ErrorTypes::ResultNotError);
+
+        return _value.error;
+    }
+    [[nodiscard]] const _E &&operator~() const &&noexcept
+    {
+        if (_isValue)
+            fail(ErrorTypes::ResultNotError);
+
+        return _value.error;
+    }
 
     [[nodiscard]] constexpr bool operator!() const noexcept { return !_isValue; }
     [[nodiscard]] constexpr operator bool() const noexcept { return _isValue; }

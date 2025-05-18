@@ -1,8 +1,6 @@
 #ifndef types_h
 #define types_h
 
-#define nameof(...) #__VA_ARGS__
-
 template<typename _T, _T _V>
 struct Constant
 {

@@ -142,14 +142,17 @@ const Error ErrorTypes::StackOverflow = "StackOvf";
 const Error ErrorTypes::InvalidOperation = "InvOp";
 const Error ErrorTypes::InvalidFormat = "InvFmt";
 const Error ErrorTypes::InvalidSyntax = "InvSytx";
-const Error ErrorTypes::InvalidType = "IntType";
+const Error ErrorTypes::InvalidType = "InvType";
 
 const Error ErrorTypes::NotImplemented = "NotImpl";
 const Error ErrorTypes::NotSupported = "NotSupt";
 
 #include <Arduino.h>
+#include "def.h"
 
-[[noreturn]] void fail(const char *const message = nullptr)
+#define fail(...) fail_with_location(__VA_ARGS__, __FILE__ ":" _mac_stringify1(__LINE__))
+
+[[noreturn]] void fail_with_location(const char *const message, const char *const location)
 {
     if (message == nullptr)
         Serial.println("Failed");
@@ -162,7 +165,28 @@ const Error ErrorTypes::NotSupported = "NotSupt";
 
     while (true);
 }
-[[noreturn]] void fail(const Error &error) { fail(error.type); }
+[[noreturn]] void fail_with_location(const Error &error, const char *const location)
+{
+    fail_with_location(error.type, location);
+}
+
+[[noreturn]] void fail_without_location(const char *const message = nullptr)
+{
+    if (message == nullptr)
+        Serial.println("Failed");
+    else
+    {
+        Serial.print("Failed: ");
+        Serial.print(message);
+        Serial.println();
+    }
+
+    while (true);
+}
+[[noreturn]] void fail_without_location(const Error &error)
+{
+    fail_without_location(error.type);
+}
 
 #include "./result.h"
 
