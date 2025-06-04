@@ -32,7 +32,7 @@ public:
 private:
     [[nodiscard]] static bool _contains(const char *larger, const char *smaller) noexcept
     {
-        if (larger[0] != '\0' && larger[0] == '!' && larger[1] == '\0')
+        if (larger[0] == '!' && larger[1] == '\0')
             return true;
 
         const char *const largerStart = larger;
@@ -187,7 +187,5 @@ const Error ErrorTypes::NotSupported = "NotSupt";
 {
     fail_without_location(error.type);
 }
-
-#include "./result.h"
 
 #endif

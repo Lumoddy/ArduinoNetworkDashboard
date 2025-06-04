@@ -2,7 +2,7 @@
 #define index_h
 
 #include <stddef.h>
-#include "result.h"
+#include "./result.h"
 
 struct Index
 {

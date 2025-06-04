@@ -3,6 +3,8 @@
 
 #define nameof(...) #__VA_ARGS__
 
+#define lengthof(...) (sizeof(__VA_ARGS__) / sizeof(*__VA_ARGS__))
+
 #define _mac_concat0(a, b) a ## b
 #define _mac_concat1(a, b) _mac_concat0(a, b)
 

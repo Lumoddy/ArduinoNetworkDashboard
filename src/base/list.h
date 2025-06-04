@@ -25,18 +25,23 @@ public:
         _T *toIt = _begin;
 
         const _T *const fromEnd = fromIt + _length;
-        for (; fromIt < fromEnd; ++fromIt, ++toIt )
+        for (; fromIt < fromEnd; ++fromIt, ++toIt)
             new (toIt) _T(*fromIt);
     }
-    constexpr List(List<_T> &&original) noexcept :
+    List(List<_T> &&original) noexcept :
         _length(original._length),
         _capacity(original._capacity),
-        _begin(original._begin) { }
+        _begin(original._begin)
+    {
+        original._length = 0;
+        original._capacity = 0;
+        original._begin = nullptr;
+    }
 
     ~List()
     {
         const _T *const itEnd = _begin + _length;
-        for (_T *it = _begin; it < itEnd; ++it )
+        for (_T *it = _begin; it < itEnd; ++it)
             it->~_T();
     }
 
@@ -70,7 +75,7 @@ public:
         return result;
     }
     template<typename _TIterable>
-    static List<_T> from(const _TIterable& iterable) noexcept
+    static List<_T> from(const _TIterable &iterable) noexcept
     {
         List<_T> result = List<_T>();
         for (const auto &item : iterable)
@@ -96,8 +101,8 @@ public:
         _length = newLength;
     }
 
-    /// @returns
-    /// `ErrorTypes::InvalidOperation`
+    /// #### Errors:
+    /// - `ErrorTypes::InvalidOperation`
     Result<_T> popBack() noexcept
     {
         if (_length == 0)
@@ -169,6 +174,10 @@ public:
         }
     }
 
+    [[nodiscard]] _T *begin() { return _begin; }
+    [[nodiscard]] const _T *begin() const { return _begin; }
+    [[nodiscard]] const _T *end() const { return _begin + _length; }
+
     List<_T> &operator=(const List<_T> &other) &noexcept
     {
         if (other._length > _capacity)
@@ -219,61 +228,69 @@ public:
         _begin = other._begin;
     }
 
-    /// @returns
-    /// `ErrorTypes::IndexOutOfRange`
-    Result<_T &> at(size_t index) noexcept
+    /// #### Errors:
+    /// - `ErrorTypes::IndexOutOfRange`
+    [[nodiscard]] Result<_T &> at(size_t index) noexcept
     {
         if (index >= _length)
             return bad ErrorTypes::IndexOutOfRange;
 
         return _begin[index];
     }
-    /// @returns
-    /// `ErrorTypes::IndexOutOfRange`
-    Result<const _T &> at(size_t index) const noexcept
+    /// #### Errors:
+    /// - `ErrorTypes::IndexOutOfRange`
+    [[nodiscard]] Result<const _T &> at(size_t index) const noexcept
     {
         if (index >= _length)
             return bad ErrorTypes::IndexOutOfRange;
 
         return _begin[index];
     }
-    /// @returns
-    /// `ErrorTypes::IndexOutOfRange`
-    Result<_T &> at(Index index) noexcept
+    /// #### Errors:
+    /// - `ErrorTypes::IndexOutOfRange`
+    [[nodiscard]] Result<_T &> at(Index index) noexcept
     {
-        set_value_or_return(size_t actualIndex, index.actualIndex(_length));
-        return _begin[actualIndex];
+        Result<size_t> actualIndex = index.actualIndex(_length);
+
+        if (!actualIndex)
+            return ~actualIndex;
+
+        return _begin[*actualIndex];
     }
-    /// @returns
-    /// `ErrorTypes::IndexOutOfRange`
-    Result<const _T &> at(Index index) const noexcept
+    /// #### Errors:
+    /// - `ErrorTypes::IndexOutOfRange`
+    [[nodiscard]] Result<const _T &> at(Index index) const noexcept
     {
-        set_value_or_return(size_t actualIndex, index.actualIndex(_length));
+        Result<size_t> actualIndex = index.actualIndex(_length);
+
+        if (!actualIndex)
+            return ~actualIndex;
+
         return _begin[actualIndex];
     }
 
-    _T &operator[](size_t index) noexcept
+    [[nodiscard]] _T &operator[](size_t index) noexcept
     {
         if (index >= _length)
             fail(ErrorTypes::IndexOutOfRange);
 
         return _begin[index];
     }
-    const _T &operator[](size_t index) const noexcept
+    [[nodiscard]] const _T &operator[](size_t index) const noexcept
     {
         if (index >= _length)
             fail(ErrorTypes::IndexOutOfRange);
 
         return _begin[index];
     }
-    _T &operator[](Index index) noexcept
+    [[nodiscard]] _T &operator[](Index index) noexcept
     {
         if (index.index >= _length)
             fail(ErrorTypes::IndexOutOfRange);
 
         return index.fromEnd ? _begin[_length - index.index - 1] : _begin[index.index];
     }
-    const _T &operator[](Index index) const noexcept
+    [[nodiscard]] const _T &operator[](Index index) const noexcept
     {
         if (index.index >= _length)
             fail(ErrorTypes::IndexOutOfRange);
@@ -287,13 +304,13 @@ private:
     inline static void _placeNewWithVariadic(_T *const at, const _T &first, const _TRest &...rest) noexcept
     {
         new (at) _T(first);
-        _placeNewWithVariadic(at + 1, rest...);
+        _placeNewWithVariadic(at + 1, static_cast<const _TRest &>(rest)...);
     }
     template<typename ..._TRest>
     inline static void _placeNewWithVariadic(_T *const at, _T &&first, _TRest &&...rest) noexcept
     {
         new (at) _T(first);
-        _placeNewWithVariadic(at + 1, rest...);
+        _placeNewWithVariadic(at + 1, static_cast<_TRest &&>(rest)...);
     }
 };
 

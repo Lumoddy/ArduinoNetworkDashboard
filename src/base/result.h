@@ -37,18 +37,6 @@ public:
 
 #define bad BadKeyword()<<=
 
-#define set_value_or_return(variable, result) \
-    auto _mac_concat1(_result_, _mac_concat1(__LINE__, _)) = result; \
-    if (!_mac_concat1(_result_, _mac_concat1(__LINE__, _)))\
-        return ResultError<decltype(_mac_concat1(_result_, _mac_concat1(__LINE__, _)).error())>(_mac_concat1(_result_, _mac_concat1(__LINE__, _)).error());\
-    variable = _mac_concat1(_result_, _mac_concat1(__LINE__, _)).value()
-
-#define set_error_or_return(variable, result) \
-    auto _mac_concat1(_result_, _mac_concat1(__LINE__, _)) = result; \
-    if (_mac_concat1(_result_, _mac_concat1(__LINE__, _)))\
-        return _mac_concat1(_result_, _mac_concat1(__LINE__, _)).value();\
-    variable = _mac_concat1(_result_, _mac_concat1(__LINE__, _)).error()
-
 template<typename _T, typename _E = Error>
 struct Result
 {
@@ -100,11 +88,13 @@ public:
         {
             _isValue = true;
             ::new (&_value.value) _T(original._value.value);
+            original._value.value.~_T();
         }
         else
         {
             _isValue = true;
             ::new (&_value.error) _E(original._value.error);
+            original._value.error.~_E();
         }
     }
 
@@ -129,7 +119,7 @@ public:
     [[nodiscard]] _T &&error() &&noexcept { return _value.error; }
     [[nodiscard]] const _T &&error() const &&noexcept { return _value.error; }
 
-    const Result<_T, _E> &operator=(const _T &value) & noexcept
+    const Result<_T, _E> &operator=(const _T &value) &noexcept
     {
         if (_isValue)
             _value.value = value;
@@ -142,7 +132,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(_T &&value) & noexcept
+    const Result<_T, _E> &operator=(_T &&value) &noexcept
     {
         if (_isValue)
             _value.value = value;
@@ -155,7 +145,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(const ResultError<_E> &error) & noexcept
+    const Result<_T, _E> &operator=(const ResultError<_E> &error) &noexcept
     {
         if (_isValue)
         {
@@ -168,7 +158,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(ResultError<_E> &&error) & noexcept
+    const Result<_T, _E> &operator=(ResultError<_E> &&error) &noexcept
     {
         if (_isValue)
         {
@@ -181,7 +171,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(const Result<_T, _E> &other) & noexcept
+    const Result<_T, _E> &operator=(const Result<_T, _E> &other) &noexcept
     {
         if (other._isValue)
             operator=(other._value.value);
@@ -190,7 +180,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(Result<_T, _E> &&other) & noexcept
+    const Result<_T, _E> &operator=(Result<_T, _E> &&other) &noexcept
     {
         if (other._isValue)
             operator=(other._value.value);
@@ -307,7 +297,7 @@ public:
     constexpr Result(_T *const value) noexcept : _isValue(true), _value(value, _ValueTag()) { }
     constexpr Result(const ResultError<_E> &error) noexcept : _isValue(false), _value(error.value, _ErrorTag()) { }
     constexpr Result(ResultError<_E> &&error) noexcept : _isValue(false), _value(error.value, _ErrorTag()) { }
-    Result(const Result<_T, _E> &original) noexcept
+    Result(const Result<_T &, _E> &original) noexcept
     {
         if (original._isValue)
         {
@@ -320,7 +310,7 @@ public:
             ::new (&_value.error) _E(original._value.error);
         }
     }
-    Result(Result<_T, _E> &&original) noexcept
+    Result(Result<_T &, _E> &&original) noexcept
     {
         if (original._isValue)
         {
@@ -331,6 +321,20 @@ public:
         {
             _isValue = true;
             ::new (&_value.error) _E(original._value.error);
+            original._value.error.~_E();
+        }
+    }
+    Result(Result<_T, _E> &reference) noexcept
+    {
+        if (reference._isValue)
+        {
+            _isValue = true;
+            _value.value = &reference._value.value;
+        }
+        else
+        {
+            _isValue = true;
+            ::new (&_value.error) _E(reference._value.error);
         }
     }
 
@@ -345,12 +349,12 @@ public:
 
     [[nodiscard]] _T &value() const noexcept { return *_value.value; }
 
-    [[nodiscard]] _T &error() &noexcept { return _value.error; }
-    [[nodiscard]] const _T &error() const &noexcept { return _value.error; }
-    [[nodiscard]] _T &&error() &&noexcept { return _value.error; }
-    [[nodiscard]] const _T &&error() const &&noexcept { return _value.error; }
+    [[nodiscard]] _E &error() &noexcept { return _value.error; }
+    [[nodiscard]] const _E &error() const &noexcept { return _value.error; }
+    [[nodiscard]] _E &&error() &&noexcept { return _value.error; }
+    [[nodiscard]] const _E &&error() const &&noexcept { return _value.error; }
 
-    const Result<_T, _E> &operator=(const _T &value) & noexcept
+    const Result<_T &, _E> &operator=(_T &value) &noexcept
     {
         if (_isValue)
             _value.value = &value;
@@ -363,20 +367,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(_T &&value) & noexcept
-    {
-        if (_isValue)
-            _value.value = &value;
-        else
-        {
-            _value.error.~_E();
-            _isValue = true;
-            _value.value = &value;
-        }
-
-        return *this;
-    }
-    const Result<_T, _E> &operator=(const ResultError<_E> &error) & noexcept
+    const Result<_T &, _E> &operator=(const ResultError<_E> &error) &noexcept
     {
         if (_isValue)
         {
@@ -388,11 +379,10 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(ResultError<_E> &&error) & noexcept
+    const Result<_T &, _E> &operator=(ResultError<_E> &&error) &noexcept
     {
         if (_isValue)
         {
-            _value.value.~_T();
             _isValue = false;
             ::new (&_value.error) _E(error.value);
         }
@@ -401,7 +391,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(const Result<_T, _E> &other) & noexcept
+    const Result<_T &, _E> &operator=(const Result<_T, _E> &other) &noexcept
     {
         if (other._isValue)
             operator=(&other._value.value);
@@ -410,7 +400,7 @@ public:
 
         return *this;
     }
-    const Result<_T, _E> &operator=(Result<_T, _E> &&other) & noexcept
+    const Result<_T &, _E> &operator=(Result<_T, _E> &&other) & noexcept
     {
         if (other._isValue)
             operator=(&other._value.value);

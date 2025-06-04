@@ -1,7 +1,11 @@
+#ifndef board_setup_h
+#define board_setup_h
+
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 
-#include "build_options.h"
+#include "./build_options.h"
+#include "./base/def.h"
 
 constexpr byte isAnalogInBit = (sizeof(unsigned short) * 8) - 1;
 constexpr byte isAnalogOutBit = (sizeof(unsigned short) * 8) - 2;
@@ -35,5 +39,7 @@ constexpr unsigned short usablePins[] =
     A4 &~bit(isDigitalOutBit) | bit(isDigitalInBit) &~bit(isAnalogOutBit) | bit(isAnalogInBit),
     A5 &~bit(isDigitalOutBit) | bit(isDigitalInBit) &~bit(isAnalogOutBit) | bit(isAnalogInBit),
 };
-constexpr byte usablePinCount = sizeof(usablePins) / sizeof(*usablePins);
+constexpr byte usablePinCount = lengthof(usablePins);
+#endif
+
 #endif
