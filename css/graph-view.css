@@ -1,0 +1,13 @@
+@property --view-x { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --view-y { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --view-scale { syntax: "<length>"; inherits: true; initial-value: 0; }
+
+graph-view
+{
+    position: relative;
+
+    > svg
+    {
+        position: absolute; top: 0; bottom: 0; left: 0; right: 0;
+    }
+}
