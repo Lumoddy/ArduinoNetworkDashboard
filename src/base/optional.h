@@ -1,16 +1,8 @@
 #ifndef optional_h
 #define optional_h
 
-#include <new>
+#include <new.h>
 #include "./result.h"
-
-struct NoneKeyword
-{
-public:
-    constexpr NoneKeyword() noexcept { }
-};
-
-#define none NoneKeyword()
 
 template<typename _T>
 struct Optional

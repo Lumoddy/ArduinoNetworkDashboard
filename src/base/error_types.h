@@ -7,9 +7,9 @@ public:
     const char* type;
 
 public:
-    Error() noexcept : type(nullptr) { }
-    Error(const char *const type) noexcept : type(type) { }
-    Error(const Error &original) noexcept : type(original.type) { }
+    constexpr Error() noexcept : type(nullptr) { }
+    constexpr Error(const char *const type) noexcept : type(type) { }
+    constexpr Error(const Error &original) noexcept : type(original.type) { }
 
     [[nodiscard]] bool is(const Error& other) noexcept { return operator>=(other); }
     [[nodiscard]] bool is(const char *const other) noexcept { return operator>=(other); }
@@ -155,11 +155,17 @@ const Error ErrorTypes::NotSupported = "NotSupt";
 [[noreturn]] void fail_with_location(const char *const message, const char *const location)
 {
     if (message == nullptr)
-        Serial.println("Failed");
+    {
+        Serial.print("Failed at ");
+        Serial.print(location);
+        Serial.println(location);
+    }
     else
     {
         Serial.print("Failed: ");
         Serial.print(message);
+        Serial.print(" at ");
+        Serial.print(location);
         Serial.println();
     }
 

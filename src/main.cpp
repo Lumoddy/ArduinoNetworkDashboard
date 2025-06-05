@@ -1,8 +1,9 @@
 #include <Arduino.h>
-#include "./optional.h"
-#include "./result.h"
-#include "./shared.h"
-#include "./list.h"
+#include "./base/optional.h"
+#include "./base/result.h"
+#include "./base/shared.h"
+#include "./base/list.h"
+#include "./base/sorted_list.h"
 
 void setup()
 {
@@ -17,8 +18,13 @@ void show(bool success)
     delay(100);
 }
 
-struct A { };
-struct E { };
+struct E
+{
+    signed char operator()(int a, int b)
+    {
+        return b - a;
+    }
+};
 
 void loop()
 {
@@ -37,14 +43,17 @@ void loop()
     // Shared<A> v2 = v1;
     // Shared<A> v3 = v2;
 
+    SortedList<char> sortedList = SortedList<char>();
+
     List<char> list = List<char>();
 
-    list.pushBack('a');
-    list.pushBack('a');
-    list.pushBack('a');
-    auto a = list.popBack();
-    if (!a)
-        return;
+    list.add('|', 'a');
+    list.add('|', 'a', 'a');
+    list.add('|', 'a', 'a', 'a');
+    list.add('|');
+
+    const char *const vg = "asdbjhs";
+    List<char>::from(vg, vg + 8);
 
     List<char> clone = list;
 

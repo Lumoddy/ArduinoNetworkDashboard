@@ -116,8 +116,11 @@ public:
     [[nodiscard]] operator bool() const noexcept { return _heap != nullptr; }
 
 private:
-    [[nodiscard]] static size_t *_heapCounter(const void *heap) noexcept { return (size_t *)heap; }
-    [[nodiscard]] static _T *_heapValue(const void *heap) noexcept { return (_T *)(heap + sizeof(size_t)); }
+    [[nodiscard]] static size_t *_heapCounter(void *heap) noexcept { return static_cast<size_t *>(heap); }
+    [[nodiscard]] static const size_t *_heapCounter(const void *heap) noexcept { return static_cast<const size_t *>(heap); }
+
+    [[nodiscard]] static _T *_heapValue(void *heap) noexcept { return static_cast<_T *>(heap + sizeof(size_t)); }
+    [[nodiscard]] static const _T *_heapValue(const void *heap) noexcept { return static_cast<const _T *>(heap + sizeof(size_t)); }
 };
 
 #endif

@@ -11,4 +11,12 @@
 #define _mac_stringify0(...) #__VA_ARGS__
 #define _mac_stringify1(...) _mac_stringify0(__VA_ARGS__)
 
+struct NoneKeyword
+{
+public:
+    constexpr NoneKeyword() noexcept { }
+};
+
+#define none NoneKeyword()
+
 #endif
