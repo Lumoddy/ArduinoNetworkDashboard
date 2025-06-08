@@ -22,17 +22,20 @@
     @public*/ constructor(port)
     {
         /**
+        @type {SerialPort}
         @private*/ this._port = port;
 
         /**
-        @private*/ this._connections = /** @type {NetworkNode[]} */([]);
+        @type {NetworkNode[]}
+        @private*/ this._connections = [];
 
         /**
-        @private*/ this._eventListeners = /** @type {{ [K in keyof NetworkPortEventMap]: ((...args: NetworkPortEventMap[K]) => void)[] | null }} */(
+        @type {{ [K in keyof NetworkPortEventMap]: ((...args: NetworkPortEventMap[K]) => void)[] | null }}
+        @private*/ this._eventListeners =
         {
             "connectionAdded": null,
             "connectionRemoved": null,
-        });
+        };
     }
 
     /**
@@ -102,17 +105,20 @@
     @public*/ constructor(connectedTo, id)
     {
         /**
+        @type {bigint}
         @private*/ this._id = id;
 
         /**
-        @private*/ this._connections = /** @type {(NetworkNode | NetworkPort)[]} */([connectedTo]);
+        @type {(NetworkNode | NetworkPort)[]}
+        @private*/ this._connections = [connectedTo];
 
         /**
-        @private*/ this._eventListeners = /** @type {{ [K in keyof NetworkNodeEventMap]: ((...args: NetworkNodeEventMap[K]) => void)[] | null }} */(
+        @type {{ [K in keyof NetworkNodeEventMap]: ((...args: NetworkNodeEventMap[K]) => void)[] | null }}
+        @private*/ this._eventListeners =
         {
             "connectionAdded": null,
             "connectionRemoved": null,
-        });
+        };
     }
 
     /**

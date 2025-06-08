@@ -2,7 +2,7 @@
 @property --view-y { syntax: "<number>"; inherits: true; initial-value: 0; }
 @property --view-scale { syntax: "<length>"; inherits: true; initial-value: 0; }
 
-graph-view
+graph-view, network-graph-view
 {
     position: relative;
 

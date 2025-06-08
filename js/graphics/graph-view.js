@@ -1,52 +1,140 @@
+import { GraphNode } from "./graph-node.js";
+
 /**
 */ export class GraphView extends HTMLElement
 {
     /**
-    @private @readonly*/ static _viewXAttributeName = "view-x";
-    /**
-    @private @readonly*/ static _viewYAttributeName = "view-y";
-    /**
-    @private @readonly*/ static _viewScaleAttributeName = "view-scale";
+    @protected @readonly*/ static observedAttributes =
+    [
+        "view-x",
+        "view-y",
+        "view-scale",
+        "view-reference",
+        "view-draggable",
+    ];
 
     /**
-    @protected*/ static observedAttributes = /** @type {const} */(
-    [
-        this._viewXAttributeName,
-        this._viewYAttributeName,
-        this._viewScaleAttributeName,
-    ]);
+    @type {ResizeObserver}
+    @private*/ _resizeObserver;
+
+    /**
+    @type {SVGSVGElement}
+    @private*/ _graphicContainer;
+
+    /**
+    @type {SVGGElement}
+    @private*/ _graphicElementContainer;
+
+    /**
+    @type {GraphNode[]}
+    @private*/ _nodes = [];
+
+    /**
+    @type {(
+        | { id: number, viewX: number, viewY: number }
+        | { id: number, viewX: number, viewY: number, node: GraphNode }
+    )[]}
+    @private*/ _draggingPointers = [];
 
     /**
     @returns {number}
-    @public*/ get viewX() { return this._viewX }
+    @public*/ get viewX()
+    {
+        const result = Number(super.getAttribute("view-x"));
+        if (Number.isNaN(result))
+            return 0;
+        return result;
+    }
     /**
     @public*/ set viewX(value)
     {
-        ++this._attributeIgnoreStack;
-        super.setAttribute(GraphView._viewXAttributeName, String(value));
-        --this._attributeIgnoreStack;
+        super.setAttribute("view-x", String(value));
     }
 
     /**
     @returns {number}
-    @public*/ get viewY() { return this._viewY }
+    @public*/ get viewY()
+    {
+        const result = Number(super.getAttribute("view-y"));
+        if (Number.isNaN(result))
+            return 0;
+        return result;
+    }
     /**
     @public*/ set viewY(value)
     {
-        ++this._attributeIgnoreStack;
-        super.setAttribute(GraphView._viewYAttributeName, String(value));
-        --this._attributeIgnoreStack;
+        super.setAttribute("view-y", String(value));
     }
 
     /**
     @returns {number}
-    @public*/ get viewScale() { return this._viewScale }
+    @public*/ get viewScale()
+    {
+        const result = Number(super.getAttribute("view-scale"));
+        if (Number.isNaN(result))
+            return 0;
+        return result;
+    }
     /**
     @public*/ set viewScale(value)
     {
-        ++this._attributeIgnoreStack;
-        super.setAttribute(GraphView._viewScaleAttributeName, String(value));
-        --this._attributeIgnoreStack;
+        super.setAttribute("view-scale", String(value));
+    }
+
+    /**
+    @returns {number}
+    @public*/ get viewScaleInPixels()
+    {
+        switch (this.viewReference)
+        {
+            case "width": return this.viewScale * super.clientWidth;
+            case "height": return this.viewScale * super.clientHeight;
+            case "pixel": return this.viewScale;
+        }
+    }
+    /**
+    @public*/ set viewScaleInPixels(value)
+    {
+        switch (this.viewReference)
+        {
+            case "width": this.viewScale = value / super.clientWidth;
+            case "height": this.viewScale = value / super.clientHeight;
+            case "pixel": this.viewScale = value;
+        }
+    }
+
+    /**
+    @returns {"width" | "height" | "pixel"}
+    @public*/ get viewReference()
+    {
+        const result = super.getAttribute("view-reference");
+        switch (result)
+        {
+            case "width":
+            case "height":
+            case "pixel":
+                return result;
+            default:
+                return "height";
+        }
+    }
+    /**
+    @public*/ set viewReference(value)
+    {
+        super.setAttribute("view-reference", String(value));
+    }
+
+    /**
+    @returns {boolean}
+    @public*/ get viewDraggable()
+    {
+        const result = super.getAttribute("view-draggable");
+        return result === "" || result === "true";
+    }
+    /**
+    @public*/ set viewDraggable(value)
+    {
+        super.setAttribute("view-draggable", value ? "true" : "false");
     }
 
     /**
@@ -54,31 +142,139 @@
     {
         super();
 
-        /**
-        @private*/ this._viewX = 0;
+        super.style.padding = "0";
 
-        /**
-        @private*/ this._viewY = 0;
-
-        /**
-        @private*/ this._viewScale = 1;
-
-        /**
-        @private*/ this._resizeObserver = new ResizeObserver(() =>
+        this._resizeObserver = new ResizeObserver(() =>
         {
-            super.style.setProperty("--view-scale", `${this._viewScale * super.clientHeight}px`);
+            super.style.setProperty("--view-scale", `${this.viewScaleInPixels}px`);
+            this._graphicContainer.setAttribute("width", String(super.clientWidth));
+            this._graphicContainer.setAttribute("height", String(super.clientHeight));
         });
 
-        const fragment = document.createDocumentFragment();
-        {
-            /**
-            @private*/ this._graphicContainer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-            fragment.appendChild(this._graphicContainer);
-        }
-        super.appendChild(fragment);
+        this._graphicContainer =
+            super.querySelector("& > svg:not([width], [height])")
+            ?? super.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
 
-        /**
-        @private*/ this._attributeIgnoreStack = 0;
+        this._graphicContainer.style.position = "position";
+        this._graphicContainer.style.top = "0";
+        this._graphicContainer.style.left = "0";
+
+        this._graphicElementContainer =
+            this._graphicContainer.querySelector("& > g")
+            ?? this._graphicContainer.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g"));
+    }
+
+    /**
+    @protected*/ connectedCallback()
+    {
+        this._resizeObserver.observe(this);
+
+        super.addEventListener("pointerdown", this._onPointerDown);
+        super.addEventListener("pointerup", this._onPointerUp);
+        super.addEventListener("pointercancel", this._onPointerUp);
+        super.addEventListener("pointermove", this._onPointerMove);
+    }
+
+    /**
+    @protected*/ disconnectedCallback()
+    {
+        this._resizeObserver.unobserve(this);
+
+        super.removeEventListener("pointerdown", this._onPointerDown);
+        super.removeEventListener("pointerup", this._onPointerUp);
+        super.removeEventListener("pointercancel", this._onPointerUp);
+        super.removeEventListener("pointermove", this._onPointerMove);
+    }
+
+    /**
+    @param {HTMLElementEventMap["pointerdown"]} event
+    @private*/ _onPointerDown(event)
+    {
+        const index = this._draggingPointers.findIndex((v) => v.id === event.pointerId)
+        if (index !== -1)
+            return;
+
+        super.setPointerCapture(event.pointerId);
+
+        const [viewX, viewY] = this.offsetToView(event.offsetX, event.offsetY);
+
+        for (let element = /** @type {Node | null} */(event.target);
+            element != null && element != this;
+            element = element.parentNode)
+        {
+            const node = this._nodes.find((v) => element === v.element)
+            if (node !== undefined)
+            {
+                node.element.setAttribute("dragging", "");
+                this._draggingPointers.push(
+                {
+                    id: event.pointerId,
+                    viewX: viewX,
+                    viewY: viewY,
+                    node: node,
+                });
+                return;
+            }
+        }
+
+        this._draggingPointers.push(
+        {
+            id: event.pointerId,
+            viewX: viewX,
+            viewY: viewY,
+        });
+    }
+
+    /**
+    @param {HTMLElementEventMap["pointerdown"]} event
+    @private*/ _onPointerUp(event)
+    {
+        const index = this._draggingPointers.findIndex((v) => v.id === event.pointerId)
+        if (index === -1)
+            return;
+
+        const pointer = this._draggingPointers[index];
+        if ("node" in pointer)
+            pointer.node.element.removeAttribute("dragging");
+
+        this._draggingPointers.splice(index, 1);
+        super.releasePointerCapture(pointer.id);
+    }
+
+    /**
+    @private*/ _upAllPointers()
+    {
+        for (const pointer of this._draggingPointers)
+        {
+            if ("node" in pointer)
+                pointer.node.element.removeAttribute("dragging");
+
+            super.releasePointerCapture(pointer.id);
+        }
+        this._draggingPointers.length = 0;
+    }
+
+    /**
+    @param {HTMLElementEventMap["pointermove"]} event
+    @private*/ _onPointerMove(event)
+    {
+        const pointer = this._draggingPointers.find((v) => v.id === event.pointerId)
+        if (pointer === undefined)
+            return;
+
+        const [viewX, viewY] = this.offsetToView(event.offsetX, event.offsetY);
+
+        if ("node" in pointer)
+        {
+            pointer.node.posX += viewX - pointer.viewX;
+            pointer.node.posY += viewY - pointer.viewY;
+            pointer.viewX = viewX;
+            pointer.viewY = viewY;
+            return;
+        }
+
+        this.viewX += pointer.viewX - viewX;
+        this.viewY += pointer.viewY - viewY;
     }
 
     /**
@@ -87,51 +283,107 @@
     @param {string | null} newValue
     @protected*/ attributeChangedCallback(attributeName, oldValue, newValue)
     {
-        if (this._attributeIgnoreStack > 0)
-            return;
-
-        ++this._attributeIgnoreStack;
-
         switch (attributeName)
         {
-            case GraphView._viewXAttributeName:
-            case GraphView._viewYAttributeName:
-            case GraphView._viewScaleAttributeName:
-            {
-                let key;
-                switch (attributeName)
-                {
-                    case GraphView._viewXAttributeName: key = /** @type {const} */("_viewX"); break;
-                    case GraphView._viewYAttributeName: key = /** @type {const} */("_viewY"); break;
-                    case GraphView._viewScaleAttributeName: key = /** @type {const} */("_viewScale"); break;
-                }
-
-                if (newValue === null)
-                {
-                    super.setAttribute(attributeName, String(this[key]));
-                    return;
-                }
-
-                const value = Number(newValue);
-                if (Number.isNaN(value))
-                {
-                    super.setAttribute(attributeName, String(this[key]));
-                    return;
-                }
-
-                this[key] = value;
-                switch (attributeName)
-                {
-                    case GraphView._viewXAttributeName: super.style.setProperty("--view-x", String(value)); break;
-                    case GraphView._viewYAttributeName: super.style.setProperty("--view-y", String(value)); break;
-                    case GraphView._viewScaleAttributeName: super.style.setProperty("--view-scale", `${value * super.clientHeight}px`); break;
-                }
-
+            case "view-x":
+                super.style.setProperty("--view-x", String(this.viewX));
                 break;
-            }
+            case "view-y":
+                super.style.setProperty("--view-y", String(this.viewY));
+                break;
+            case "view-scale":
+            case "view-reference":
+                super.style.setProperty("--view-scale", `${this.viewScaleInPixels}px`);
+                break;
+            case "view-draggable":
+                if (!this.viewDraggable)
+                    this._upAllPointers();
+                break;
         }
+    }
 
-        --this._attributeIgnoreStack;
+    /**
+    @param {number} x
+    @param {number} y
+    @returns {[x: number, y: number]}
+    @public*/ viewToOffset(x, y)
+    {
+        const viewScaleInPixels = this.viewScaleInPixels;
+        return (
+        [
+            ((x - this.viewX) * viewScaleInPixels) + (super.clientWidth * 0.5),
+            ((y - this.viewY) * viewScaleInPixels) + (super.clientHeight * 0.5),
+        ]);
+    }
+
+    /**
+    @param {number} x
+    @param {number} y
+    @returns {[x: number, y: number]}
+    @public*/ offsetToView(x, y)
+    {
+        const viewScaleInPixels = this.viewScaleInPixels;
+        return (
+        [
+            ((x - (super.clientWidth * 0.5)) / viewScaleInPixels) + this.viewX,
+            ((y - (super.clientHeight * 0.5)) / viewScaleInPixels) + this.viewY,
+        ]);
+    }
+
+    /**
+    @returns {GraphNode}
+    @public*/ createGraphNode()
+    {
+        return this.appendGraphNode(new GraphNode());
+    }
+
+    /**
+    @param {GraphNode} node
+    @returns {GraphNode}
+    @public*/ appendGraphNode(node)
+    {
+        const privateNode = /**
+        @type {Pick<GraphNode, keyof GraphNode> &
+        {
+            _graph: GraphView | null,
+            _element: SVGGElement | undefined,
+        }}
+        */(/** @type {unknown} */(node));
+
+        if (privateNode._graph !== this && privateNode._graph !== null)
+            privateNode._graph.removeGraphNode(node);
+
+        const index = this._nodes.indexOf(node);
+        if (index !== -1)
+            return node;
+
+        this._nodes.push(node);
+        privateNode._graph = this;
+        if (privateNode._element !== undefined)
+            this._graphicElementContainer.appendChild(privateNode._element);
+        return node;
+    }
+
+    /**
+    @param {GraphNode} node
+    @public*/ removeGraphNode(node)
+    {
+        const privateNode = /**
+        @type {Pick<GraphNode, keyof GraphNode> &
+        {
+            _graph: GraphView | null,
+            _element: SVGGElement | undefined,
+        }}
+        */(/** @type {unknown} */(node));
+
+        const index = this._nodes.indexOf(node);
+        if (index === -1)
+            return;
+
+        this._nodes.splice(index, 1);
+        privateNode._graph = null;
+        if (privateNode._element !== undefined)
+            this._graphicElementContainer.removeChild(privateNode._element);
     }
 }
 customElements.define("graph-view", GraphView);
