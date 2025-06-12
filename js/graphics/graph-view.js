@@ -15,11 +15,17 @@ import { GraphNode } from "./graph-node.js";
 
     /**
     @type {ResizeObserver}
-    @private*/ _resizeObserver;
+    @private*/ _resizeObserver = new ResizeObserver((entries) =>
+    {
+        super.style.setProperty("--view-scale", String(this.viewScale));
+        super.style.setProperty("--view-reference", `${this.viewReferenceInPixels}px`);
+        this._graphicWindow.setAttribute("width", String(super.clientWidth));
+        this._graphicWindow.setAttribute("height", String(super.clientHeight));
+    });
 
     /**
     @type {SVGSVGElement}
-    @private*/ _graphicContainer;
+    @private*/ _graphicWindow;
 
     /**
     @type {SVGGElement}
@@ -28,6 +34,14 @@ import { GraphNode } from "./graph-node.js";
     /**
     @type {GraphNode[]}
     @private*/ _nodes = [];
+
+    /**
+    @type {MutationObserver}
+    @private*/ _nodeMutationObserver = new MutationObserver((entries) =>
+    {
+        if (entries.some((v) => v.type === "attributes"))
+            this._upAllPointers((v) => "node" in v && !v.node.draggable);
+    });
 
     /**
     @type {(
@@ -42,7 +56,7 @@ import { GraphNode } from "./graph-node.js";
     {
         const result = Number(super.getAttribute("view-x"));
         if (Number.isNaN(result))
-            return 0;
+            return 0.0;
         return result;
     }
     /**
@@ -57,7 +71,7 @@ import { GraphNode } from "./graph-node.js";
     {
         const result = Number(super.getAttribute("view-y"));
         if (Number.isNaN(result))
-            return 0;
+            return 0.0;
         return result;
     }
     /**
@@ -71,8 +85,8 @@ import { GraphNode } from "./graph-node.js";
     @public*/ get viewScale()
     {
         const result = Number(super.getAttribute("view-scale"));
-        if (Number.isNaN(result))
-            return 0;
+        if (result <= 0.0 || Number.isNaN(result))
+            return 1.0;
         return result;
     }
     /**
@@ -83,25 +97,51 @@ import { GraphNode } from "./graph-node.js";
 
     /**
     @returns {number}
-    @public*/ get viewScaleInPixels()
+    @public*/ get minViewScale()
     {
-        switch (this.viewReference)
-        {
-            case "width": return this.viewScale * super.clientWidth;
-            case "height": return this.viewScale * super.clientHeight;
-            case "pixel": return this.viewScale;
-        }
+        const result = Number(super.getAttribute("view-min-scale"));
+        if (result <= 0.0 || Number.isNaN(result))
+            return 0.2;
+        return result;
     }
     /**
-    @public*/ set viewScaleInPixels(value)
+    @public*/ set minViewScale(value)
+    {
+        super.setAttribute("view-min-scale", String(value));
+    }
+
+    /**
+    @returns {number}
+    @public*/ get maxViewScale()
+    {
+        const result = Number(super.getAttribute("view-max-scale"));
+        if (result <= 0.0 || Number.isNaN(result))
+            return 5.0;
+        return result;
+    }
+    /**
+    @public*/ set maxViewScale(value)
+    {
+        super.setAttribute("view-max-scale", String(value));
+    }
+
+    /**
+    @returns {number}
+    @public @readonly*/ get viewReferenceInPixels()
     {
         switch (this.viewReference)
         {
-            case "width": this.viewScale = value / super.clientWidth;
-            case "height": this.viewScale = value / super.clientHeight;
-            case "pixel": this.viewScale = value;
+            case "width": return super.clientWidth;
+            case "height": return super.clientHeight;
+            case "pixel": return 1;
         }
     }
+
+    /**
+    @returns {number}
+    @public*/ get viewScaleInPixels() { return this.viewScale * this.viewReferenceInPixels }
+    /**
+    @public*/ set viewScaleInPixels(value) { this.viewScale = value / this.viewReferenceInPixels }
 
     /**
     @returns {"width" | "height" | "pixel"}
@@ -138,30 +178,27 @@ import { GraphNode } from "./graph-node.js";
     }
 
     /**
+    @returns {SVGGElement}
+    @public @readonly*/ get container() { return this._graphicElementContainer }
+
+    /**
     @public*/ constructor()
     {
         super();
 
         super.style.padding = "0";
 
-        this._resizeObserver = new ResizeObserver(() =>
-        {
-            super.style.setProperty("--view-scale", `${this.viewScaleInPixels}px`);
-            this._graphicContainer.setAttribute("width", String(super.clientWidth));
-            this._graphicContainer.setAttribute("height", String(super.clientHeight));
-        });
-
-        this._graphicContainer =
+        this._graphicWindow =
             super.querySelector("& > svg:not([width], [height])")
             ?? super.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
 
-        this._graphicContainer.style.position = "position";
-        this._graphicContainer.style.top = "0";
-        this._graphicContainer.style.left = "0";
+        this._graphicWindow.style.position = "absolute";
+        this._graphicWindow.style.top = "0";
+        this._graphicWindow.style.left = "0";
 
         this._graphicElementContainer =
-            this._graphicContainer.querySelector("& > g")
-            ?? this._graphicContainer.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g"));
+            this._graphicWindow.querySelector("& > g")
+            ?? this._graphicWindow.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "g"));
     }
 
     /**
@@ -173,6 +210,7 @@ import { GraphNode } from "./graph-node.js";
         super.addEventListener("pointerup", this._onPointerUp);
         super.addEventListener("pointercancel", this._onPointerUp);
         super.addEventListener("pointermove", this._onPointerMove);
+        super.addEventListener("wheel", this._onWheel);
     }
 
     /**
@@ -184,6 +222,7 @@ import { GraphNode } from "./graph-node.js";
         super.removeEventListener("pointerup", this._onPointerUp);
         super.removeEventListener("pointercancel", this._onPointerUp);
         super.removeEventListener("pointermove", this._onPointerMove);
+        super.removeEventListener("wheel", this._onWheel);
     }
 
     /**
@@ -194,35 +233,45 @@ import { GraphNode } from "./graph-node.js";
         if (index !== -1)
             return;
 
+        console.log(event);
+
         super.setPointerCapture(event.pointerId);
 
         const [viewX, viewY] = this.offsetToView(event.offsetX, event.offsetY);
 
-        for (let element = /** @type {Node | null} */(event.target);
-            element != null && element != this;
-            element = element.parentNode)
+        if (event.button === 0 || event.pointerType === "touch")
         {
-            const node = this._nodes.find((v) => element === v.element)
-            if (node !== undefined)
+            for (let element = /** @type {Node | null} */(event.target);
+                element != null && element != this;
+                element = element.parentNode)
             {
-                node.element.setAttribute("dragging", "");
-                this._draggingPointers.push(
+                const node = this._nodes.find((v) => element === v.element)
+                if (node !== undefined && node.draggable)
                 {
-                    id: event.pointerId,
-                    viewX: viewX,
-                    viewY: viewY,
-                    node: node,
-                });
-                return;
+                    node.element.setAttribute("dragging", "");
+                    this._draggingPointers.push(
+                    {
+                        id: event.pointerId,
+                        viewX: viewX,
+                        viewY: viewY,
+                        node: node,
+                    });
+                    return;
+                }
             }
         }
 
-        this._draggingPointers.push(
+        if (this.draggable && (event.button === 1 || event.button === 2 || event.pointerType === "touch"))
         {
-            id: event.pointerId,
-            viewX: viewX,
-            viewY: viewY,
-        });
+            this._draggingPointers.push(
+            {
+                id: event.pointerId,
+                viewX: viewX,
+                viewY: viewY,
+            });
+        }
+
+        event.preventDefault();
     }
 
     /**
@@ -239,19 +288,26 @@ import { GraphNode } from "./graph-node.js";
 
         this._draggingPointers.splice(index, 1);
         super.releasePointerCapture(pointer.id);
+
+        event.preventDefault();
     }
 
     /**
-    @private*/ _upAllPointers()
+    @param {(pointer: typeof this._draggingPointers[number]) => boolean} [filter]
+    @private*/ _upAllPointers(filter)
     {
-        for (const pointer of this._draggingPointers)
+        this._draggingPointers = this._draggingPointers.filter((pointer) =>
         {
+            if (filter !== undefined && !filter(pointer))
+                return false;
+
             if ("node" in pointer)
                 pointer.node.element.removeAttribute("dragging");
 
             super.releasePointerCapture(pointer.id);
-        }
-        this._draggingPointers.length = 0;
+
+            return true;
+        });
     }
 
     /**
@@ -278,6 +334,41 @@ import { GraphNode } from "./graph-node.js";
     }
 
     /**
+    @param {HTMLElementEventMap["wheel"]} event
+    @private*/ _onWheel(event)
+    {
+        if (!this.draggable || event.deltaY === 0.0)
+            return;
+
+        const [beforeViewX, beforeViewY] = this.offsetToView(event.offsetX, event.offsetY);
+
+        const scrollDelta = event.deltaY / -100;
+
+        let newViewScale = this.viewScale * Math.pow(1.2, scrollDelta);
+        if (scrollDelta < 0)
+        {
+            const min = this.minViewScale;
+            if (newViewScale < min)
+                newViewScale = min;
+        }
+        else
+        {
+            const max = this.maxViewScale;
+            if (newViewScale > max)
+                newViewScale = max;
+        }
+
+        this.viewScale = newViewScale;
+
+        const [afterViewX, afterViewY] = this.offsetToView(event.offsetX, event.offsetY);
+
+        this.viewX += beforeViewX - afterViewX;
+        this.viewY += beforeViewY - afterViewY;
+
+        event.preventDefault();
+    }
+
+    /**
     @param {typeof GraphView["observedAttributes"][number]} attributeName
     @param {string | null} oldValue
     @param {string | null} newValue
@@ -292,8 +383,10 @@ import { GraphNode } from "./graph-node.js";
                 super.style.setProperty("--view-y", String(this.viewY));
                 break;
             case "view-scale":
+                super.style.setProperty("--view-scale", String(this.viewScale));
+                break;
             case "view-reference":
-                super.style.setProperty("--view-scale", `${this.viewScaleInPixels}px`);
+                super.style.setProperty("--view-reference", `${this.viewReference}px`);
                 break;
             case "view-draggable":
                 if (!this.viewDraggable)
@@ -342,25 +435,20 @@ import { GraphNode } from "./graph-node.js";
     @returns {GraphNode}
     @public*/ appendGraphNode(node)
     {
-        const privateNode = /**
-        @type {Pick<GraphNode, keyof GraphNode> &
-        {
-            _graph: GraphView | null,
-            _element: SVGGElement | undefined,
-        }}
-        */(/** @type {unknown} */(node));
-
-        if (privateNode._graph !== this && privateNode._graph !== null)
-            privateNode._graph.removeGraphNode(node);
+        // @ts-ignore
+        if (node._graph !== this && node._graph !== null) // @ts-ignore
+            node._graph.removeGraphNode(node);
 
         const index = this._nodes.indexOf(node);
         if (index !== -1)
             return node;
 
-        this._nodes.push(node);
-        privateNode._graph = this;
-        if (privateNode._element !== undefined)
-            this._graphicElementContainer.appendChild(privateNode._element);
+        this._nodes.push(node); // @ts-ignore
+        node._graph = this; // @ts-ignore
+        this._graphicElementContainer.appendChild(node.element);
+
+        this._nodeMutationObserver.observe(node.element, { attributeFilter: ["view-draggable"] });
+
         return node;
     }
 
@@ -368,22 +456,17 @@ import { GraphNode } from "./graph-node.js";
     @param {GraphNode} node
     @public*/ removeGraphNode(node)
     {
-        const privateNode = /**
-        @type {Pick<GraphNode, keyof GraphNode> &
-        {
-            _graph: GraphView | null,
-            _element: SVGGElement | undefined,
-        }}
-        */(/** @type {unknown} */(node));
-
         const index = this._nodes.indexOf(node);
         if (index === -1)
             return;
 
-        this._nodes.splice(index, 1);
-        privateNode._graph = null;
-        if (privateNode._element !== undefined)
-            this._graphicElementContainer.removeChild(privateNode._element);
+        this._nodes.splice(index, 1); // @ts-ignore
+        node._graph = null;
+        this._graphicElementContainer.removeChild(node.element);
+
+        this._nodeMutationObserver.disconnect();
+        for (const node of this._nodes)
+            this._nodeMutationObserver.observe(node.element, { attributeFilter: ["view-draggable"] });
     }
 }
 customElements.define("graph-view", GraphView);

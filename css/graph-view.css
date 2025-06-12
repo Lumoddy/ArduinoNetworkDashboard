@@ -1,6 +1,10 @@
+
 @property --view-x { syntax: "<number>"; inherits: true; initial-value: 0; }
 @property --view-y { syntax: "<number>"; inherits: true; initial-value: 0; }
-@property --view-scale { syntax: "<length>"; inherits: true; initial-value: 0; }
+@property --view-scale { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --view-reference { syntax: "<length>"; inherits: true; initial-value: 0; }
+@property --pos-x { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --pos-y { syntax: "<number>"; inherits: true; initial-value: 0; }
 
 graph-view, network-graph-view
 {
@@ -9,5 +13,19 @@ graph-view, network-graph-view
     > svg
     {
         position: absolute; top: 0; bottom: 0; left: 0; right: 0;
+
+        > g
+        {
+            transform: translate(
+                calc(50% + ((0 - var(--view-x)) * var(--view-scale) * var(--view-reference))),
+                calc(50% + ((0 - var(--view-y)) * var(--view-scale) * var(--view-reference))));
+
+            > *
+            {
+                transform: translate(
+                    calc(var(--pos-x) * var(--view-scale) * var(--view-reference)),
+                    calc(var(--pos-y) * var(--view-scale) * var(--view-reference)));
+            }
+        }
     }
 }

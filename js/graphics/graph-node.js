@@ -61,8 +61,31 @@ import { GraphView } from "./graph-view.js";
     }
 
     /**
+    @returns {boolean}
+    @public*/ get draggable()
+    {
+        if (this._element === undefined)
+            return false;
+
+        const result = this._element.getAttribute("view-draggable");
+        return result === "" || result === "true";
+    }
+    /**
+    @public*/ set draggable(value)
+    {
+        if (value)
+            this.element.setAttribute("view-draggable", "");
+        else if (this._element !== undefined)
+            this._element.removeAttribute("view-draggable");
+    }
+
+    /**
+    @returns {boolean}
+    @public @readonly*/ get initialized() { return this._element !== undefined }
+
+    /**
     @returns {SVGGElement}
-    @public*/ get element()
+    @public @readonly*/ get element()
     {
         if (this._element === undefined)
         {
@@ -88,7 +111,7 @@ import { GraphView } from "./graph-view.js";
             this._mutationObserver.observe(this._element, { attributeFilter: ["pos-x", "pos-y"] });
 
             if (this._graph !== null)
-                this._graph.appendChild(this._element);
+                this._graph.container.appendChild(this._element);
         }
 
         return this._element;
@@ -96,58 +119,4 @@ import { GraphView } from "./graph-view.js";
 
     /**
     @public*/ constructor() { }
-
-    /**
-    @template {SVGElement} T
-    @param {T} node
-    @public*/ appendChild(node)
-    {
-        this.element.appendChild(node);
-    }
-
-    /**
-    @template {keyof SVGElementTagNameMap} K
-    @overload
-    @param {K} selectors
-    @returns {SVGElementTagNameMap[K] | null}
-    *//**
-    @template {SVGElement} E
-    @overload
-    @param {string} selectors
-    @returns {E | null}
-    *//**
-    @param {string} selectors
-    @returns {SVGElement | null}
-    @public*/ querySelector(selectors)
-    {
-        if (this._element === undefined)
-            return null;
-
-        return this._element.querySelector(selectors);
-    }
-
-    /**
-    @template {keyof SVGElementTagNameMap} K
-    @overload
-    @param {K} selectors
-    @returns {NodeListOf<SVGElementTagNameMap[K]>}
-    *//**
-    @template {SVGElement} E
-    @overload
-    @param {string} selectors
-    @returns {NodeListOf<E>}
-    *//**
-    @param {string} selectors
-    @returns {NodeListOf<SVGGElement>}
-    @public*/ querySelectorAll(selectors)
-    {
-        if (this._element === undefined)
-        {
-            const result = /** @type {NodeListOf<SVGGElement> & []} */([]);
-            result.item = function (index) { return this[index] };
-            return result;
-        }
-
-        return this._element.querySelectorAll(selectors);
-    }
 }
