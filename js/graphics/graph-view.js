@@ -1,4 +1,4 @@
-import { GraphNode } from "./graph-node.js";
+import { GraphElement } from "./graph-element.js";
 
 /**
 */ export class GraphView extends HTMLElement
@@ -32,7 +32,7 @@ import { GraphNode } from "./graph-node.js";
     @private*/ _graphicElementContainer;
 
     /**
-    @type {GraphNode[]}
+    @type {GraphElement[]}
     @private*/ _nodes = [];
 
     /**
@@ -40,13 +40,13 @@ import { GraphNode } from "./graph-node.js";
     @private*/ _nodeMutationObserver = new MutationObserver((entries) =>
     {
         if (entries.some((v) => v.type === "attributes"))
-            this._upAllPointers((v) => "node" in v && !v.node.draggable);
+            this._upAllPointers((v) => "node" in v && !v.node.viewDraggable);
     });
 
     /**
     @type {(
         | { id: number, viewX: number, viewY: number }
-        | { id: number, viewX: number, viewY: number, node: GraphNode }
+        | { id: number, viewX: number, viewY: number, node: GraphElement }
     )[]}
     @private*/ _draggingPointers = [];
 
@@ -233,8 +233,6 @@ import { GraphNode } from "./graph-node.js";
         if (index !== -1)
             return;
 
-        console.log(event);
-
         super.setPointerCapture(event.pointerId);
 
         const [viewX, viewY] = this.offsetToView(event.offsetX, event.offsetY);
@@ -246,9 +244,9 @@ import { GraphNode } from "./graph-node.js";
                 element = element.parentNode)
             {
                 const node = this._nodes.find((v) => element === v.element)
-                if (node !== undefined && node.draggable)
+                if (node !== undefined && node.viewDraggable)
                 {
-                    node.element.setAttribute("dragging", "");
+                    node.element.setAttribute("view-dragging", "");
                     this._draggingPointers.push(
                     {
                         id: event.pointerId,
@@ -261,7 +259,7 @@ import { GraphNode } from "./graph-node.js";
             }
         }
 
-        if (this.draggable && (event.button === 1 || event.button === 2 || event.pointerType === "touch"))
+        if (this.viewDraggable && (event.button === 1 || event.button === 2 || event.pointerType === "touch"))
         {
             this._draggingPointers.push(
             {
@@ -269,6 +267,8 @@ import { GraphNode } from "./graph-node.js";
                 viewX: viewX,
                 viewY: viewY,
             });
+
+            super.setAttribute("view-dragging", "");
         }
 
         event.preventDefault();
@@ -284,7 +284,9 @@ import { GraphNode } from "./graph-node.js";
 
         const pointer = this._draggingPointers[index];
         if ("node" in pointer)
-            pointer.node.element.removeAttribute("dragging");
+            pointer.node.element.removeAttribute("view-dragging");
+        else if (this._draggingPointers.some((v) => !("node" in v)))
+            super.removeAttribute("view-dragging");
 
         this._draggingPointers.splice(index, 1);
         super.releasePointerCapture(pointer.id);
@@ -302,12 +304,14 @@ import { GraphNode } from "./graph-node.js";
                 return false;
 
             if ("node" in pointer)
-                pointer.node.element.removeAttribute("dragging");
+                pointer.node.element.removeAttribute("view-dragging");
 
             super.releasePointerCapture(pointer.id);
 
             return true;
         });
+
+        super.removeAttribute("view-dragging");
     }
 
     /**
@@ -337,7 +341,7 @@ import { GraphNode } from "./graph-node.js";
     @param {HTMLElementEventMap["wheel"]} event
     @private*/ _onWheel(event)
     {
-        if (!this.draggable || event.deltaY === 0.0)
+        if (!this.viewDraggable || event.deltaY === 0.0)
             return;
 
         const [beforeViewX, beforeViewY] = this.offsetToView(event.offsetX, event.offsetY);
@@ -424,20 +428,21 @@ import { GraphNode } from "./graph-node.js";
     }
 
     /**
-    @returns {GraphNode}
-    @public*/ createGraphNode()
+    @returns {GraphElement}
+    @public*/ createGraphElement()
     {
-        return this.appendGraphNode(new GraphNode());
+        return this.appendGraphElement(new GraphElement());
     }
 
     /**
-    @param {GraphNode} node
-    @returns {GraphNode}
-    @public*/ appendGraphNode(node)
+    @param {GraphElement} node
+    
+    @returns {GraphElement}
+    @public*/ appendGraphElement(node)
     {
         // @ts-ignore
         if (node._graph !== this && node._graph !== null) // @ts-ignore
-            node._graph.removeGraphNode(node);
+            node._graph.removeGraphElement(node);
 
         const index = this._nodes.indexOf(node);
         if (index !== -1)
@@ -453,8 +458,8 @@ import { GraphNode } from "./graph-node.js";
     }
 
     /**
-    @param {GraphNode} node
-    @public*/ removeGraphNode(node)
+    @param {GraphElement} node
+    @public*/ removeGraphElement(node)
     {
         const index = this._nodes.indexOf(node);
         if (index === -1)

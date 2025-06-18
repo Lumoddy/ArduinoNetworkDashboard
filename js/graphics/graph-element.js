@@ -1,7 +1,7 @@
 import { GraphView } from "./graph-view.js";
 
 /**
-*/ export class GraphNode
+*/ export class GraphElement
 {
     /**
     @type {GraphView | null}
@@ -62,7 +62,7 @@ import { GraphView } from "./graph-view.js";
 
     /**
     @returns {boolean}
-    @public*/ get draggable()
+    @public*/ get viewDraggable()
     {
         if (this._element === undefined)
             return false;
@@ -71,7 +71,7 @@ import { GraphView } from "./graph-view.js";
         return result === "" || result === "true";
     }
     /**
-    @public*/ set draggable(value)
+    @public*/ set viewDraggable(value)
     {
         if (value)
             this.element.setAttribute("view-draggable", "");
@@ -119,4 +119,11 @@ import { GraphView } from "./graph-view.js";
 
     /**
     @public*/ constructor() { }
+
+    /**
+    @public*/ remove()
+    {
+        if (this._graph !== null)
+            this._graph.removeGraphElement(this);
+    }
 }

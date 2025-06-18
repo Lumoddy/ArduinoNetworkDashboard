@@ -28,4 +28,9 @@ graph-view, network-graph-view
             }
         }
     }
+
+    &[view-dragging]:has(> svg), &:has(> svg > g > *[view-dragging])
+    {
+        cursor: move;
+    }
 }
