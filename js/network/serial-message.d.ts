@@ -82,51 +82,48 @@ type SerialMessageEncodingValueOfCallback<F extends SerialMessageEncodingCallbac
     F extends SerialMessageEncodingCallback<infer V> ? V :
     never
 
-type SerialMessageEncodingArrayOf<F extends SerialMessageEncodingCallback> =
-    ArrayLike<SerialMessageEncodingValueOf<F>>
-
 type SerialMessageEncodingValueOfTuple<F extends SerialMessageEncodingField[]> =
     F extends readonly [] ? [] :
     F extends readonly [
         infer V extends SerialMessageEncodingField,
-        ...infer R extends SerialMessageEncodingField[]]
-        ? [SerialMessageEncodingValueOf<V>, ...SerialMessageEncodingValueOfTuple<R>] :
+        ...infer R extends readonly SerialMessageEncodingField[]]
+        ? readonly [SerialMessageEncodingValueOf<V>, ...SerialMessageEncodingValueOfTuple<R>] :
     F extends readonly [
-        ...infer R extends SerialMessageEncodingField[],
+        ...infer R extends readonly SerialMessageEncodingField[],
         infer V extends SerialMessageEncodingField]
-        ? [...SerialMessageEncodingValueOfTuple<R>, SerialMessageEncodingValueOf<V>] :
+        ? readonly [...SerialMessageEncodingValueOfTuple<R>, SerialMessageEncodingValueOf<V>] :
     F extends readonly (infer V extends SerialMessageEncodingField)[]
-        ? SerialMessageEncodingValueOf<V>[] :
+        ? readonly SerialMessageEncodingValueOf<V>[] :
     never
 
 type SerialMessageEncodingValueOfObject<F extends [key: string, value: SerialMessageEncodingField][]> =
     F extends readonly [] ? {} :
     F extends readonly [
-        [infer N extends string, infer V extends SerialMessageEncodingField | SerialMessageDecodingField],
-        ...infer R extends [string, SerialMessageEncodingField | SerialMessageDecodingField][]]
+        readonly [infer N extends string, infer V extends SerialMessageEncodingField],
+        ...infer R extends readonly (readonly [string, SerialMessageEncodingField])[]]
         ? {
-            [K in N | keyof SerialMessageEncodingValueOf<R>]:
-                string extends K ? SerialMessageEncodingValueOf<V> | SerialMessageEncodingValueOf<R>[keyof SerialMessageEncodingValueOf<R>] :
+            readonly [K in N | keyof SerialMessageEncodingValueOfObject<R>]:
+                string extends K ? SerialMessageEncodingValueOf<V> | SerialMessageEncodingValueOfObject<R>[keyof SerialMessageEncodingValueOfObject<R>] :
                 | (K extends N ? SerialMessageEncodingValueOf<V> : never)
-                | (K extends keyof SerialMessageEncodingValueOf<R> ? SerialMessageEncodingValueOf<R>[K] : never)
+                | (K extends keyof SerialMessageEncodingValueOfObject<R> ? SerialMessageEncodingValueOfObject<R>[K] : never)
         } :
     F extends readonly [
-        ...infer R extends [string, SerialMessageEncodingField | SerialMessageDecodingField][],
-        [infer N extends string, infer V extends SerialMessageEncodingField | SerialMessageDecodingField]]
+        ...infer R extends readonly (readonly [string, SerialMessageEncodingField])[],
+        readonly [infer N extends string, infer V extends SerialMessageEncodingField]]
         ? {
-            [K in N | keyof SerialMessageEncodingValueOf<R>]:
-                string extends K ? SerialMessageEncodingValueOf<V> | SerialMessageEncodingValueOf<R>[keyof SerialMessageEncodingValueOf<R>] :
+            readonly [K in N | keyof SerialMessageEncodingValueOfObject<R>]:
+                string extends K ? SerialMessageEncodingValueOf<V> | SerialMessageEncodingValueOfObject<R>[keyof SerialMessageEncodingValueOfObject<R>] :
                 | (K extends N ? SerialMessageEncodingValueOf<V> : never)
-                | (K extends keyof SerialMessageEncodingValueOf<R> ? SerialMessageEncodingValueOf<R>[K] : never)
+                | (K extends keyof SerialMessageEncodingValueOfObject<R> ? SerialMessageEncodingValueOfObject<R>[K] : never)
         } :
-    F extends readonly [infer N extends string | number, infer V extends SerialMessageEncodingField | SerialMessageDecodingFormat][]
-        ? { [K in N]: SerialMessageEncodingValueOf<V> } :
+    F extends readonly (readonly [infer N extends string, infer V extends SerialMessageEncodingField])[]
+        ? { readonly [K in N]: SerialMessageEncodingValueOf<V> } :
     never
 
 type SerialMessageEncodingValueOf<F extends SerialMessageEncodingField> =
     F extends string ? SerialMessageEncodingValueOfBuiltIn<F> :
     F extends SerialMessageEncodingCallback ? SerialMessageEncodingValueOfCallback<F> :
-    F extends readonly ["Array" | "[]", infer V extends SerialMessageEncodingField] ? SerialMessageEncodingArrayOf<V> :
+    F extends readonly ["Array" | "[]", infer V extends SerialMessageEncodingField] ? ArrayLike<SerialMessageEncodingValueOf<V>> :
     F extends readonly ["Tuple" | "()", ...infer V extends SerialMessageEncodingField[]] ? SerialMessageEncodingValueOfTuple<V> :
     F extends readonly ["Object" | "class" | "struct" | "{}", ...infer V extends [string, SerialMessageEncodingField][]] ? SerialMessageEncodingValueOfObject<V> :
     never
@@ -157,9 +154,6 @@ type SerialMessageDecodingValueOfCallback<F extends SerialMessageDecodingCallbac
     F extends SerialMessageDecodingCallback<infer V> ? V :
     never
 
-type SerialMessageDecodingArrayOf<F extends SerialMessageDecodingCallback> =
-    ArrayLike<SerialMessageDecodingValueOf<F>>
-
 type SerialMessageDecodingValueOfTuple<F extends SerialMessageDecodingField[]> =
     F extends readonly [] ? [] :
     F extends readonly [
@@ -177,31 +171,31 @@ type SerialMessageDecodingValueOfTuple<F extends SerialMessageDecodingField[]> =
 type SerialMessageDecodingValueOfObject<F extends [key: string, value: SerialMessageDecodingField][]> =
     F extends readonly [] ? {} :
     F extends readonly [
-        [infer N extends string, infer V extends SerialMessageDecodingField | SerialMessageDecodingField],
-        ...infer R extends [string, SerialMessageDecodingField | SerialMessageDecodingField][]]
+        [infer N extends string, infer V extends SerialMessageDecodingField],
+        ...infer R extends [string, SerialMessageDecodingField][]]
         ? {
-            [K in N | keyof SerialMessageDecodingValueOf<R>]:
-                string extends K ? SerialMessageDecodingValueOf<V> | SerialMessageDecodingValueOf<R>[keyof SerialMessageDecodingValueOf<R>] :
+            [K in N | keyof SerialMessageDecodingValueOfObject<R>]:
+                string extends K ? SerialMessageDecodingValueOf<V> | SerialMessageDecodingValueOfObject<R>[keyof SerialMessageDecodingValueOfObject<R>] :
                 | (K extends N ? SerialMessageDecodingValueOf<V> : never)
-                | (K extends keyof SerialMessageDecodingValueOf<R> ? SerialMessageDecodingValueOf<R>[K] : never)
+                | (K extends keyof SerialMessageDecodingValueOfObject<R> ? SerialMessageDecodingValueOfObject<R>[K] : never)
         } :
     F extends readonly [
-        ...infer R extends [string, SerialMessageDecodingField | SerialMessageDecodingField][],
-        [infer N extends string, infer V extends SerialMessageDecodingField | SerialMessageDecodingField]]
+        ...infer R extends [string, SerialMessageDecodingField][],
+        [infer N extends string, infer V extends SerialMessageDecodingField]]
         ? {
-            [K in N | keyof SerialMessageDecodingValueOf<R>]:
-                string extends K ? SerialMessageDecodingValueOf<V> | SerialMessageDecodingValueOf<R>[keyof SerialMessageDecodingValueOf<R>] :
+            [K in N | keyof SerialMessageDecodingValueOfObject<R>]:
+                string extends K ? SerialMessageDecodingValueOf<V> | SerialMessageDecodingValueOfObject<R>[keyof SerialMessageDecodingValueOfObject<R>] :
                 | (K extends N ? SerialMessageDecodingValueOf<V> : never)
-                | (K extends keyof SerialMessageDecodingValueOf<R> ? SerialMessageDecodingValueOf<R>[K] : never)
+                | (K extends keyof SerialMessageDecodingValueOfObject<R> ? SerialMessageDecodingValueOfObject<R>[K] : never)
         } :
-    F extends readonly [infer N extends string | number, infer V extends SerialMessageDecodingField | SerialMessageDecodingFormat][]
+    F extends readonly [infer N extends string, infer V extends SerialMessageDecodingField][]
         ? { [K in N]: SerialMessageDecodingValueOf<V> } :
     never
 
 type SerialMessageDecodingValueOf<F extends SerialMessageDecodingField> =
     F extends string ? SerialMessageDecodingValueOfBuiltIn<F> :
     F extends SerialMessageDecodingCallback ? SerialMessageDecodingValueOfCallback<F> :
-    F extends readonly ["Array" | "[]", infer V extends SerialMessageDecodingField] ? SerialMessageDecodingArrayOf<V> :
+    F extends readonly ["Array" | "[]", infer V extends SerialMessageDecodingField] ? SerialMessageDecodingValueOf<V>[] :
     F extends readonly ["Tuple" | "()", ...infer V extends SerialMessageDecodingField[]] ? SerialMessageDecodingValueOfTuple<V> :
     F extends readonly ["Object" | "class" | "struct" | "{}", ...infer V extends [string, SerialMessageDecodingField][]] ? SerialMessageDecodingValueOfObject<V> :
     never

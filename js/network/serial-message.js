@@ -798,12 +798,14 @@
 
             case "Tuple":
             case "()":
-            { // @ts-ignore
+            {
+                const [_, ...formatContents] = format;
+                const elementFormats = formatContents.map(_decodeCallback); // @ts-ignore
                 return (nextByte) =>
                 {
                     const result = new Array(format.length - 1);
                     for (let i = 1; i < format.length; i++) // @ts-ignore
-                        result[i] = _decodeCallback(format[i])(nextByte);
+                        result[i] = elementFormats[i](nextByte);
 
                     return result;
                 };
@@ -813,15 +815,19 @@
             case "class":
             case "struct":
             case "{}":
-            { // @ts-ignore
+            {
+                const elementFormats = /** @type {{ [K in string]: SerialMessageDecodingCallback<any> }} */({});
+                for (let i = 1; i < format.length; i++)
+                {
+                    const [key, value] = format[i]; // @ts-ignore
+                    elementFormats[key] = _decodeCallback(value);
+                }
+                // @ts-ignore
                 return (nextByte) =>
                 {
                     const result = /** @type {{ [K in string]: any }} */({});
-                    for (let i = 1; i < format.length; i++)
-                    {
-                        const [key, value] = format[i]; // @ts-ignore
-                        result[key] = _decodeCallback(value)(nextByte);
-                    }
+                    for (const key in elementFormats)
+                        result[key] = elementFormats[key](nextByte);
 
                     return result;
                 };
