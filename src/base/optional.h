@@ -2,6 +2,7 @@
 #define optional_h
 
 #include <new.h>
+#include "./def.h"
 #include "./result.h"
 
 template<typename _T>
@@ -11,7 +12,7 @@ private:
     union _ValueUnion
     {
         _T value;
-        unsigned char uninitialized[sizeof(_T)];
+        uint8_t uninitialized[sizeof(_T)];
 
         constexpr _ValueUnion() noexcept : uninitialized{} { }
         constexpr _ValueUnion(const _T &value) noexcept : value(value) { }

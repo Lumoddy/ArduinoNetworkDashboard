@@ -5,7 +5,7 @@
 #include "./result.h"
 #include "./index.h"
 
-using Sign = signed char;
+using Sign = int8_t;
 
 template<typename _T>
 constexpr static Sign compareByOperator(const _T &lhs, const _T &rhs) { return lhs == rhs ? 0 : lhs < rhs ? -1 : 1; }
@@ -16,9 +16,9 @@ constexpr static Sign compareValueByOperator(const _T lhs, const _T rhs) { retur
 template<typename _T>
 static Sign compareByBinary(const _T &lhs, const _T &rhs)
 {
-    const byte *lhsIt = static_cast<const byte *>(static_cast<const void *>(&lhs));
-    const byte *rhsIt = static_cast<const byte *>(static_cast<const void *>(&rhs));
-    const byte *const lhsEnd = lhsIt + sizeof(_T);
+    const uint8_t *lhsIt = static_cast<const uint8_t *>(static_cast<const void *>(&lhs));
+    const uint8_t *rhsIt = static_cast<const uint8_t *>(static_cast<const void *>(&rhs));
+    const uint8_t *const lhsEnd = lhsIt + sizeof(_T);
 
     for (; lhsIt < lhsEnd; ++lhsIt, ++rhsIt)
     {
@@ -34,25 +34,25 @@ static Sign compareByBinary(const _T &lhs, const _T &rhs)
 template<typename _T>
 struct DefaultCompare { static Sign compare(const _T &lhs, const _T &rhs) { return compareByBinary(lhs, rhs); } };
 template<>
-struct DefaultCompare<unsigned char> { static Sign compare(const unsigned char lhs, const unsigned char rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<uint8_t> { static Sign compare(const uint8_t lhs, const uint8_t rhs) { return compareValueByOperator(lhs, rhs); } };
 template<>
-struct DefaultCompare<signed char> { static Sign compare(const signed char lhs, const signed char rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<int8_t> { static Sign compare(const int8_t lhs, const int8_t rhs) { return compareValueByOperator(lhs, rhs); } };
 template<>
-struct DefaultCompare<unsigned short> { static Sign compare(const unsigned short lhs, const unsigned short rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<uint16_t> { static Sign compare(const uint16_t lhs, const uint16_t rhs) { return compareValueByOperator(lhs, rhs); } };
 template<>
-struct DefaultCompare<signed short> { static Sign compare(const signed short lhs, const signed short rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<int16_t> { static Sign compare(const int16_t lhs, const int16_t rhs) { return compareValueByOperator(lhs, rhs); } };
 template<>
-struct DefaultCompare<unsigned int> { static Sign compare(const unsigned int lhs, const unsigned int rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<uint32_t> { static Sign compare(const uint32_t lhs, const uint32_t rhs) { return compareValueByOperator(lhs, rhs); } };
 template<>
-struct DefaultCompare<signed int> { static Sign compare(const signed int lhs, const signed int rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<int32_t> { static Sign compare(const int32_t lhs, const int32_t rhs) { return compareValueByOperator(lhs, rhs); } };
 template<>
-struct DefaultCompare<unsigned long> { static Sign compare(const unsigned long lhs, const unsigned long rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<uint64_t> { static Sign compare(const uint64_t lhs, const uint64_t rhs) { return compareValueByOperator(lhs, rhs); } };
 template<>
-struct DefaultCompare<signed long> { static Sign compare(const signed long lhs, const signed long rhs) { return compareValueByOperator(lhs, rhs); } };
+struct DefaultCompare<int64_t> { static Sign compare(const int64_t lhs, const int64_t rhs) { return compareValueByOperator(lhs, rhs); } };
 
 /// #### Requires:
 /// - `_T` : Not a reference.
-/// - `_TComparer` : Includes static `Sign compare(_T, _T)`.
+/// - `_TComparer` : Implements `static Sign compare(_T, _T)`.
 template<typename _T, typename _TComparer = DefaultCompare<_T>>
 class SortedList : private List<_T>
 {
@@ -251,7 +251,7 @@ protected:
 
     inline static void _swap(_T &a, _T &b)
     {
-        byte c[sizeof(_T)];
+        uint8_t c[sizeof(_T)];
         ::new (static_cast<void *>(&c)) _T(static_cast<_T &&>(a));
         a = static_cast<_T &&>(b);
         b = static_cast<_T &&>(*static_cast<_T *>(static_cast<void *>(c)));

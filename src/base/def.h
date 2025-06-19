@@ -1,6 +1,8 @@
 #ifndef def_h
 #define def_h
 
+#include <stddef.h>
+
 #define nameof(...) #__VA_ARGS__
 
 #define lengthof(...) (sizeof(__VA_ARGS__) / sizeof(*__VA_ARGS__))

@@ -4,6 +4,8 @@
 #include "./base/shared.h"
 #include "./base/list.h"
 #include "./base/sorted_list.h"
+#include "./base/tuple.h"
+#include "./network/serial_messages.h"
 
 void setup()
 {
@@ -95,4 +97,10 @@ void loop()
     delay(100);
     digitalWrite(LED_BUILTIN, LOW);
     delay(1100);
+
+    SerialMessageReader<int (*)()> reader([]{ return Serial.read(); });
+    SerialMessageDecoder<Tuple<int, long, char>> decoder(reader);
+
+    decoder.read();
+    auto d = decoder.result();
 }

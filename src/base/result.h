@@ -13,15 +13,15 @@ public:
     _E value;
 
 public:
-    constexpr ResultError(const _E &value) : value(value) { }
-    constexpr ResultError(_E &&value) : value(value) { }
-    constexpr ResultError(const ResultError<_E> &original) : value(original.value) { }
-    constexpr ResultError(ResultError<_E> &&original) : value(original.value) { }
+    constexpr ResultError(const _E &value) noexcept : value(value) { }
+    constexpr ResultError(_E &&value) noexcept : value(value) { }
+    constexpr ResultError(const ResultError<_E> &original) noexcept : value(original.value) { }
+    constexpr ResultError(ResultError<_E> &&original) noexcept : value(original.value) { }
 
-    constexpr ResultError &operator=(const _E &value) & { this->value = value; return *this; }
-    constexpr ResultError &operator=(_E &&value) & { this->value = value; return *this; }
-    constexpr ResultError &operator=(const ResultError<_E> &value) & { this->value = value.value; return *this; }
-    constexpr ResultError &operator=(ResultError<_E> &&value) & { this->value = value.value; return *this; }
+    ResultError &operator=(const _E &value) & noexcept { this->value = value; return *this; }
+    ResultError &operator=(_E &&value) & noexcept { this->value = value; return *this; }
+    ResultError &operator=(const ResultError<_E> &value) & noexcept { this->value = value.value; return *this; }
+    ResultError &operator=(ResultError<_E> &&value) & noexcept { this->value = value.value; return *this; }
 };
 
 struct BadKeyword
@@ -30,9 +30,9 @@ public:
     constexpr BadKeyword() noexcept { }
 
     template<typename _E>
-    constexpr ResultError<_E> operator<<=(const _E &value) { return ResultError<_E>(value); }
+    constexpr ResultError<_E> operator<<=(const _E &value) const noexcept { return ResultError<_E>(value); }
     template<typename _E>
-    constexpr ResultError<_E> operator<<=(_E &&value) { return ResultError<_E>(value); }
+    constexpr ResultError<_E> operator<<=(_E &&value) const noexcept { return ResultError<_E>(value); }
 };
 
 #define bad BadKeyword()<<=

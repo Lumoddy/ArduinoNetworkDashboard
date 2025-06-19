@@ -329,6 +329,9 @@ public:
     [[nodiscard]] const _T *begin() const { return _begin; }
     [[nodiscard]] const _T *end() const { return _begin + _length; }
 
+    [[nodiscard]] _T *enumerate() { return _begin; }
+    [[nodiscard]] const _T *enumerate() const { return _begin; }
+
     List<_T> &operator=(const List<_T> &other) &noexcept
     {
         if (other._length > _capacity)
