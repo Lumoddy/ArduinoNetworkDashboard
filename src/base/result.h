@@ -51,9 +51,8 @@ private:
     {
         _T value;
         _E error;
-        byte uninitialized[sizeof(_E) > sizeof(_T) ? sizeof(_E) : sizeof(_T)];
 
-        constexpr _ValueUnion() noexcept : uninitialized{} { }
+        constexpr _ValueUnion() noexcept { }
         constexpr _ValueUnion(const _T &value, _ValueTag) noexcept : value(value) { }
         constexpr _ValueUnion(_T &&value, _ValueTag) noexcept : value(value) { }
         constexpr _ValueUnion(const _E &value, _ErrorTag) noexcept : error(value) { }
@@ -293,9 +292,8 @@ private:
     {
         _T *value;
         _E error;
-        byte uninitialized[sizeof(_E) > sizeof(_T *) ? sizeof(_E) : sizeof(_T *)];
 
-        constexpr _ValueUnion() noexcept : uninitialized{} { }
+        constexpr _ValueUnion() noexcept { }
         constexpr _ValueUnion(_T *const value, _ValueTag) noexcept : value(value) { }
         constexpr _ValueUnion(const _E &value, _ErrorTag) noexcept : error(value) { }
         constexpr _ValueUnion(_E &&value, _ErrorTag) noexcept : error(value) { }
@@ -488,9 +486,8 @@ private:
     {
         byte value;
         _E error;
-        byte uninitialized[sizeof(_E) > sizeof(byte) ? sizeof(_E) : sizeof(byte)];
 
-        constexpr _ValueUnion() noexcept : uninitialized{} { }
+        constexpr _ValueUnion() noexcept { }
         constexpr _ValueUnion(const _E &value) noexcept : error(value) { }
         constexpr _ValueUnion(_E &&value) noexcept : error(value) { }
 

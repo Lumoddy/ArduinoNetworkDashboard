@@ -12,9 +12,8 @@ private:
     union _ValueUnion
     {
         _T value;
-        uint8_t uninitialized[sizeof(_T)];
 
-        constexpr _ValueUnion() noexcept : uninitialized{} { }
+        constexpr _ValueUnion() noexcept { }
         constexpr _ValueUnion(const _T &value) noexcept : value(value) { }
         constexpr _ValueUnion(_T &&value) noexcept : value(value) { }
 

@@ -54,9 +54,6 @@ void loop()
     list.add('|', 'a', 'a', 'a');
     list.add('|');
 
-    const char *const vg = "asdbjhs";
-    List<char>::from(vg, vg + 8);
-
     List<char> clone = list;
 
     list.setCapacity(10);
@@ -99,8 +96,6 @@ void loop()
     delay(1100);
 
     SerialMessageReader<int (*)()> reader([]{ return Serial.read(); });
-    SerialMessageDecoder<Tuple<int, long, char>> decoder(reader);
-
-    decoder.read();
-    auto d = decoder.result();
+    SerialMessageDecoder<Tuple<int32_t, int64_t, int8_t>> decoder(reader);
+    SerialMessageDecoder<List<int64_t>> asdecoder(reader);
 }

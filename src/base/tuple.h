@@ -2,7 +2,6 @@
 #define tuple_h
 
 #include <stdlib.h>
-#include <math.h>
 
 template<typename ..._T>
 struct Tuple;
@@ -14,6 +13,7 @@ struct _TupleAt_t<_I, _TFirst, _TRest...>
 {
 public:
     using Type = typename _TupleAt_t<_I - 1, _TRest...>::Type;
+    using TupleSubType = typename _TupleAt_t<_I - 1, _TRest...>::TupleSubType;
 
 public:
     [[nodiscard]] static constexpr Type &elementAt(Tuple<_TFirst, _TRest...> &tuple) noexcept
@@ -30,6 +30,7 @@ struct _TupleAt_t<0, _TFirst, _TRest...>
 {
 public:
     using Type = _TFirst;
+    using TupleSubType = Tuple<_TFirst, _TRest...>;
 
 public:
     [[nodiscard]] static constexpr Type &elementAt(Tuple<_TFirst, _TRest...> &tuple) noexcept
@@ -45,6 +46,7 @@ template<size_t _I>
 struct _TupleAt_t<_I>
 {
     using Type = void;
+    using TupleSubType = void;
 };
 
 template<typename ..._T>
@@ -55,6 +57,12 @@ struct Tuple<_TFirst, _TRest...> : private Tuple<_TRest...>
 {
     template<size_t _I, typename ..._T>
     friend class _TupleAt_t;
+
+    template<size_t _I, typename ..._T>
+    friend constexpr inline typename _TupleAt_t<_I, _T...>::Type &at(Tuple<_T...> &tuple) noexcept;
+
+    template<size_t _I, typename ..._T>
+    friend constexpr inline const typename _TupleAt_t<_I, _T...>::Type &at(const Tuple<_T...> &tuple) noexcept;
 
 public:
     static constexpr size_t length = 1 + Tuple<_TRest...>::length;
@@ -88,6 +96,7 @@ public:
 
     ~Tuple() = default;
 
+public:
     Tuple<_TFirst, _TRest...> &operator=(const Tuple<_TFirst, _TRest...> &original) & noexcept
     {
         Tuple<_TRest...>::operator=(static_cast<const Tuple<_TRest...> &>(original));
@@ -99,18 +108,6 @@ public:
         Tuple<_TRest...>::operator=(static_cast<Tuple<_TRest...> &&>(original));
         _value = static_cast<_TFirst &&>(original._value);
         return *this;
-    }
-
-public:
-    template<size_t _I>
-    [[nodiscard]] constexpr const At<_I> &at() const noexcept
-    {
-        return _TupleAt_t<_I, _TFirst, _TRest...>::elementAt(*this);
-    }
-    template<size_t _I>
-    [[nodiscard]] constexpr At<_I> &at() noexcept
-    {
-        return _TupleAt_t<_I, _TFirst, _TRest...>::elementAt(*this);
     }
 };
 
@@ -126,11 +123,22 @@ public:
     constexpr Tuple() { }
     constexpr Tuple(const Tuple<>&) { }
     constexpr Tuple(Tuple<>&&) { }
-    ~Tuple() = default;
+    ~Tuple() { }
 
 public:
-    template<size_t _I>
-    constexpr void at() const noexcept { }
+    Tuple<> &operator=(const Tuple<> &) & noexcept { return *this; }
+    Tuple<> &operator=(Tuple<> &&) & noexcept { return *this; }
+};
+
+template<size_t _I, typename ..._T>
+constexpr inline typename _TupleAt_t<_I, _T...>::Type &at(Tuple<_T...> &tuple) noexcept
+{
+    return static_cast<typename _TupleAt_t<_I, _T...>::TupleSubType &>(tuple)._value;
+};
+template<size_t _I, typename ..._T>
+constexpr inline const typename _TupleAt_t<_I, _T...>::Type &at(const Tuple<_T...> &tuple) noexcept
+{
+    return static_cast<const typename _TupleAt_t<_I, _T...>::TupleSubType &>(tuple)._value;
 };
 
 #endif

@@ -77,7 +77,7 @@ private:
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint8_t> &&original) = default;
     ~SerialMessageDecoder() = default;
 
 public:
@@ -92,13 +92,20 @@ public:
 
         _result = (uint8_t)byte;
         _isCompleted = true;
+        return true;
     }
 
-    bool available() const noexcept { return _isCompleted; }
+    [[nodiscard]] bool available() const noexcept { return _isCompleted; }
 
     uint8_t result() const noexcept { return _result; }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    void reset() noexcept
+    {
+        _result = 0;
+        _isCompleted = false;
+    }
+
+    SerialMessageDecoder<uint8_t> &operator=(SerialMessageDecoder<uint8_t> &&original) = default;
 };
 
 template<>
@@ -107,15 +114,16 @@ class SerialMessageDecoder<int8_t> : private SerialMessageDecoder<uint8_t>
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         SerialMessageDecoder<uint8_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int8_t> &&original) = default;
     ~SerialMessageDecoder() = default;
 
 public:
     bool read() noexcept { return SerialMessageDecoder<uint8_t>::read(); }
-    bool available() const noexcept { return SerialMessageDecoder<uint8_t>::available(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint8_t>::available(); }
     int8_t result() const noexcept { return (int8_t)SerialMessageDecoder<uint8_t>::result(); }
+    void reset() noexcept { SerialMessageDecoder<uint8_t>::reset(); }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    SerialMessageDecoder<int8_t> &operator=(SerialMessageDecoder<int8_t> &&original) = default;
 };
 
 template<>
@@ -129,7 +137,7 @@ private:
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint16_t> &&original) = default;
     ~SerialMessageDecoder() = default;
 
 public:
@@ -160,11 +168,17 @@ public:
         }
     }
 
-    bool available() const noexcept { return _state == 2; }
+    [[nodiscard]] bool available() const noexcept { return _state == 2; }
 
     uint16_t result() const noexcept { return _result; }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    void reset() noexcept
+    {
+        _result = 0;
+        _state = 0;
+    }
+
+    SerialMessageDecoder<uint16_t> &operator=(SerialMessageDecoder<uint16_t> &&original) = default;
 };
 
 template<>
@@ -173,15 +187,16 @@ class SerialMessageDecoder<int16_t> : private SerialMessageDecoder<uint16_t>
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         SerialMessageDecoder<uint16_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int16_t> &&original) = default;
     ~SerialMessageDecoder() = default;
 
 public:
     bool read() noexcept { return SerialMessageDecoder<uint16_t>::read(); }
-    bool available() const noexcept { return SerialMessageDecoder<uint16_t>::available(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint16_t>::available(); }
     int16_t result() const noexcept { return (int16_t)SerialMessageDecoder<uint16_t>::result(); }
+    void reset() noexcept { SerialMessageDecoder<uint16_t>::reset(); }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    SerialMessageDecoder<int16_t> &operator=(SerialMessageDecoder<int16_t> &&original) = default;
 };
 
 template<>
@@ -195,7 +210,7 @@ private:
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint32_t> &&original) = default;
     ~SerialMessageDecoder() = default;
 
 public:
@@ -244,11 +259,17 @@ public:
         }
     }
 
-    bool available() const noexcept { return _state == 4; }
+    [[nodiscard]] bool available() const noexcept { return _state == 4; }
 
     uint32_t result() const noexcept { return _result; }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    void reset() noexcept
+    {
+        _result = 0;
+        _state = 0;
+    }
+
+    SerialMessageDecoder<uint32_t> &operator=(SerialMessageDecoder<uint32_t> &&original) = default;
 };
 
 template<>
@@ -257,14 +278,15 @@ class SerialMessageDecoder<int32_t> : private SerialMessageDecoder<uint32_t>
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         SerialMessageDecoder<uint32_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int32_t> &&original) = default;
 
 public:
     bool read() noexcept { return SerialMessageDecoder<uint32_t>::read(); }
-    bool available() const noexcept { return SerialMessageDecoder<uint32_t>::available(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint32_t>::available(); }
     int32_t result() const noexcept { return (int32_t)SerialMessageDecoder<uint32_t>::result(); }
+    void reset() noexcept { SerialMessageDecoder<uint32_t>::reset(); }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    SerialMessageDecoder<int32_t> &operator=(SerialMessageDecoder<int32_t> &&original) = default;
 };
 
 template<>
@@ -278,7 +300,7 @@ private:
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint64_t> &&original) = default;
     ~SerialMessageDecoder() = default;
 
 public:
@@ -363,11 +385,17 @@ public:
         }
     }
 
-    bool available() const noexcept { return _state == 8; }
+    [[nodiscard]] bool available() const noexcept { return _state == 8; }
 
     uint64_t result() const noexcept { return _result; }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    void reset() noexcept
+    {
+        _result = 0;
+        _state = 0;
+    }
+
+    SerialMessageDecoder<uint64_t> &operator=(SerialMessageDecoder<uint64_t> &&original) = default;
 };
 
 template<>
@@ -376,29 +404,36 @@ class SerialMessageDecoder<int64_t> : private SerialMessageDecoder<uint64_t>
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         SerialMessageDecoder<uint64_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder &&original) = default;
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int64_t> &&original) = default;
     ~SerialMessageDecoder() = default;
 
 public:
     bool read() noexcept { return SerialMessageDecoder<uint64_t>::read(); }
-    bool available() const noexcept { return SerialMessageDecoder<uint64_t>::available(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint64_t>::available(); }
     int64_t result() const noexcept { return (int64_t)SerialMessageDecoder<uint64_t>::result(); }
+    void reset() noexcept { SerialMessageDecoder<uint64_t>::reset(); }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    SerialMessageDecoder<int64_t> &operator=(SerialMessageDecoder<int64_t> &&original) = default;
 };
 
 template<typename _TFirst, typename _TSecond, typename ..._TRest>
 class SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>>
 {
 private:
+    using _FirstDecoder = SerialMessageDecoder<_TFirst>;
+    using _RestDecoder = SerialMessageDecoder<Tuple<_TSecond, _TRest...>>;
+    using _RestDecoderAndFirstValue = Tuple<_RestDecoder, _TFirst>;
+    using _ResultTuple = Tuple<_TFirst, _TSecond, _TRest...>;
+
+private:
     union _ValueUnion
     {
-        uint8_t uninitialized;
-        SerialMessageDecoder<_TFirst> first;
-        Tuple<SerialMessageDecoder<Tuple<_TSecond, _TRest...>>, _TFirst> second;
-        Tuple<_TFirst, _TSecond, _TRest...> result;
+        _FirstDecoder first;
+        _RestDecoderAndFirstValue second;
+        _ResultTuple result;
 
-        constexpr _ValueUnion() : uninitialized() { }
+        constexpr _ValueUnion() { }
+        ~_ValueUnion() { }
     };
 
 private:
@@ -409,7 +444,8 @@ private:
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         _reader(&reader) { }
-    SerialMessageDecoder(SerialMessageDecoder &&original) : _reader(original._reader)
+    SerialMessageDecoder(SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) :
+        _reader(original._reader)
     {
         switch (original._state)
         {
@@ -418,15 +454,15 @@ public:
                 break;
             case 1:
                 _state = 1;
-                _value.first = static_cast<decltype(original._value.first) &&>(original._value.first);
+                ::new (_value.first) _FirstDecoder(static_cast<_FirstDecoder &&>(original._value.first));
                 break;
             case 2:
                 _state = 2;
-                _value.second = static_cast<decltype(original._value.second) &&>(original._value.second);
+                ::new (_value.second) _RestDecoderAndFirstValue(static_cast<_RestDecoderAndFirstValue &&>(original._value.second));
                 break;
             case 3:
                 _state = 3;
-                _value.result = static_cast<decltype(original._value.result) &&>(original._value.result);
+                ::new (_value.result) _ResultTuple(static_cast<_ResultTuple &&>(original._value.result));
                 break;
         }
     }
@@ -435,13 +471,13 @@ public:
         switch (_state)
         {
             case 1:
-                _value.first.~SerialMessageDecoder<_TFirst>();
+                _value.first.~_FirstDecoder();
                 break;
             case 2:
-                _value.second.~Tuple<SerialMessageDecoder<Tuple<_TSecond, _TRest...>>, _TFirst>();
+                _value.second.~_RestDecoderAndFirstValue();
                 break;
             case 3:
-                _value.result.~Tuple<_TFirst, _TSecond, _TRest...>();
+                _value.result.~_ResultTuple();
                 break;
         }
     }
@@ -453,7 +489,7 @@ public:
         {
             default:
             {
-                ::new (&_value.first) decltype(_value.first)(*_reader);
+                ::new (&_value.first) _FirstDecoder(*_reader);
                 _state = 1;
             }
             case 1:
@@ -461,25 +497,29 @@ public:
                 if (!_value.first.read())
                     return false;
 
-                decltype(_value.second) newValue =
+                _RestDecoderAndFirstValue newValue =
                 {
                     SerialMessageDecoder<Tuple<_TSecond, _TRest...>>(*_reader),
-                    _value.first.result(),
+                    static_cast<_TFirst &&>(_value.first.result()),
                 };
-                _value.first.~SerialMessageDecoder<_TFirst>();
-                ::new (&_value.second) decltype(_value.second)(static_cast<decltype(_value.second) &&>(newValue));
+                _value.first.~_FirstDecoder();
+                ::new (&_value.second) _RestDecoderAndFirstValue(static_cast<_RestDecoderAndFirstValue &&>(newValue));
                 _state = 2;
             }
             case 2:
             {
-                SerialMessageDecoder<Tuple<_TSecond, _TRest...>> &secondDecoder = _value.second.at<0>();
+                _RestDecoder &secondDecoder = at<0>(_value.second);
 
                 if (!secondDecoder.read())
                     return false;
 
-                decltype(_value.result) newValue = secondDecoder.result();
-                _value.second.~Tuple();
-                ::new (&_value.result) decltype(_value.result)(static_cast<decltype(_value.result) &&>(newValue));
+                _ResultTuple newValue =
+                {
+                    static_cast<_TFirst &&>(at<1>(_value.second)),
+                    static_cast<Tuple<_TSecond, _TRest...> &&>(secondDecoder.result()),
+                };
+                _value.second.~_RestDecoderAndFirstValue();
+                ::new (&_value.result) _ResultTuple(static_cast<_ResultTuple &&>(newValue));
                 _state = 3;
             }
             case 3:
@@ -487,25 +527,46 @@ public:
         }
     }
 
-    bool available() const noexcept { return _state == 3; }
+    [[nodiscard]] bool available() const noexcept { return _state == 3; }
 
-    Tuple<_TFirst, _TSecond, _TRest...> &result() noexcept { return _value.result; }
-    const Tuple<_TFirst, _TSecond, _TRest...> &result() const noexcept { return _value.result; }
+    [[nodiscard]] Tuple<_TFirst, _TSecond, _TRest...> &result() noexcept { return _value.result; }
+    [[nodiscard]] const Tuple<_TFirst, _TSecond, _TRest...> &result() const noexcept { return _value.result; }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    void reset() noexcept
+    {
+        switch (_state)
+        {
+            case 1:
+                _value.first.~_FirstDecoder();
+                break;
+            case 2:
+                _value.second.~_RestDecoderAndFirstValue();
+                break;
+            case 3:
+                _value.result.~_ResultTuple();
+                break;
+        }
+        _state = 0;
+    }
+
+    SerialMessageDecoder &operator=(SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) = default;
 };
 
 template<typename _TFirst>
 class SerialMessageDecoder<Tuple<_TFirst>>
 {
 private:
+    using _FirstDecoder = SerialMessageDecoder<_TFirst>;
+    using _ResultTuple = Tuple<_TFirst>;
+
+private:
     union _ValueUnion
     {
-        uint8_t uninitialized;
-        SerialMessageDecoder<_TFirst> first;
-        Tuple<_TFirst> result;
+        _FirstDecoder first;
+        _ResultTuple result;
 
-        constexpr _ValueUnion() : uninitialized() { }
+        constexpr _ValueUnion() { }
+        ~_ValueUnion() { }
     };
 
 private:
@@ -516,7 +577,7 @@ private:
 public:
     constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
         _reader(&reader) { }
-    SerialMessageDecoder(SerialMessageDecoder &&original) : _reader(original._reader)
+    SerialMessageDecoder(SerialMessageDecoder<Tuple<_TFirst>> &&original) : _reader(original._reader)
     {
         switch (original._state)
         {
@@ -525,23 +586,23 @@ public:
                 break;
             case 1:
                 _state = 1;
-                _value.first = original._value.first;
+                ::new (_value.first) _FirstDecoder(static_cast<_FirstDecoder &&>(original._value.first));
                 break;
             case 2:
                 _state = 2;
-                _value.result = original._value.result;
+                ::new (_value.result) _ResultTuple(static_cast<_ResultTuple &&>(original._value.result));
                 break;
         }
     }
     ~SerialMessageDecoder()
     {
-        switch (original._state)
+        switch (_state)
         {
             case 1:
-                _value.first.~SerialMessageDecoder<_TFirst>();
+                _value.first.~_FirstDecoder();
                 break;
             case 2:
-                _value.result.~Tuple<_TFirst>();
+                _value.result.~_ResultTuple();
                 break;
         }
     }
@@ -561,9 +622,9 @@ public:
                 if (!_value.first.read())
                     return false;
 
-                decltype(_value.result) newValue = _value.first.result();
-                _value.first.~SerialMessageDecoder<_TFirst>();
-                ::new (&_value.result) decltype(_value.result)(static_cast<decltype(_value.result) &&>(newValue));
+                _ResultTuple newValue = _value.first.result();
+                _value.first.~_FirstDecoder();
+                ::new (&_value.result) _ResultTuple(static_cast<_ResultTuple &&>(newValue));
                 _state = 2;
             }
             case 2:
@@ -571,34 +632,142 @@ public:
         }
     }
 
-    bool available() const noexcept { return _state == 2; }
+    [[nodiscard]] bool available() const noexcept { return _state == 2; }
 
-    Tuple<_TFirst> &result() const noexcept { return _value.result; }
+    [[nodiscard]] Tuple<_TFirst> &result() noexcept { return _value.result; }
+    [[nodiscard]] const Tuple<_TFirst> &result() const noexcept { return _value.result; }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder &&original) = default;
+    void reset() noexcept
+    {
+        switch (_state)
+        {
+            case 1:
+                _value.first.~_FirstDecoder();
+                break;
+            case 2:
+                _value.result.~_ResultTuple();
+                break;
+        }
+        _state = 0;
+    }
+
+    SerialMessageDecoder &operator=(SerialMessageDecoder<Tuple<_TFirst>> &&original)
+    {
+        switch (_state)
+        {
+            case 1:
+                _value.first.~_FirstDecoder();
+                break;
+            case 2:
+                _value.result.~_ResultTuple();
+                break;
+        }
+        _reader = original._reader;
+        switch (original._state)
+        {
+            default:
+                _state = 0;
+                break;
+            case 1:
+                _state = 1;
+                ::new (_value.first) _FirstDecoder(static_cast<_FirstDecoder &&>(original._value.first));
+                break;
+            case 2:
+                _state = 2;
+                ::new (_value.result) _ResultTuple(static_cast<_ResultTuple &&>(original._value.result));
+                break;
+        }
+
+        return *this;
+    }
 };
 
 template<typename _T>
 class SerialMessageDecoder<List<_T>>
 {
-public:
-    SerialMessageDecoder() = delete;
-    SerialMessageDecoder(const SerialMessageDecoder &) = delete;
-    SerialMessageDecoder(SerialMessageDecoder &&) = delete;
+private:
+    static constexpr size_t _indexIsStateBit = (sizeof(size_t) * 8) - 1;
+    static constexpr size_t _indexIsStateBitMask = 1 << _indexIsStateBit;
+
+private:
+    const SerialMessageReader<> *_reader;
+    SerialMessageDecoder<_T> _decoder;
+    List<_T> _result;
+    size_t _index = _indexIsStateBitMask + 0;
+    uint8_t _firstHalfOfLength = 0;
 
 public:
-    /// #### Errors:
-    /// - `ErrorTypes::InvalidOperation` if the reader ends before the value can fully decode.
-    static Result<List<_T>, SerialMessageDecoderError> read(const SerialMessageReader<> &reader)
+    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
+        _reader(&reader),
+        _decoder(reader) { }
+    SerialMessageDecoder(SerialMessageDecoder<List<_T>> &&original) = default;
+    ~SerialMessageDecoder() = default;
+
+public:
+    bool read() noexcept
     {
-        size_t length;
+        switch (_index)
+        {
+            case _indexIsStateBitMask + 0:
+            {
+                const int byte = _reader->read();
+                if (byte == -1)
+                    return false;
 
-        Result<_T, SerialMessageDecoderError> first = SerialMessageDecoder<_T>::read(reader);
-        if (!first)
-            return bad ~first;
+                if (byte != 0xFF)
+                {
+                    _result.setCapacity(byte & 0xFF);
+                    _index = 0;
+                    break;
+                }
+            }
+            case _indexIsStateBitMask + 1:
+            {
+                const int byte = _reader->read();
+                if (byte == -1)
+                    return false;
 
-        return Tuple<_T>(first);
+                _firstHalfOfLength = byte & 0xFF;
+            }
+            case _indexIsStateBitMask + 2:
+            {
+                const int byte = _reader->read();
+                if (byte == -1)
+                    return false;
+
+                _result.setCapacity(_firstHalfOfLength | ((byte & 0xFF) << 8));
+                _index = 0;
+                break;
+            }
+        }
+
+        for (; _index < _result.length(); ++_index)
+        {
+            if (!_decoder.read())
+                return false;
+
+            _T newValue = static_cast<_T &&>(_decoder.result());
+            _decoder.reset();
+
+            _result.add(static_cast<_T &&>(newValue));
+        }
+
+        return true;
     }
+
+    [[nodiscard]] bool available() const noexcept { return _index == _result.length(); }
+
+    [[nodiscard]] List<_T> &result() noexcept { return _result; }
+    [[nodiscard]] const List<_T> &result() const noexcept { return _result; }
+
+    void reset()
+    {
+        _decoder.reset();
+        _result.clear();
+        _index = 0;
+    }
+
+    SerialMessageDecoder &operator=(SerialMessageDecoder<List<_T>> &&original) = default;
 };
 
 #endif

@@ -1,6 +1,8 @@
 #ifndef types_h
 #define types_h
 
+#include <stddef.h>
+
 template<typename _T, _T _V>
 struct Constant
 {
@@ -9,9 +11,9 @@ public:
     using type = _T;
 
 public:
-    [[nodiscard]] constexpr operator _T() { return value; }
+    [[nodiscard]] constexpr operator _T() const noexcept { return value; }
 
-    [[nodiscard]] constexpr _T operator()() { return value; }
+    [[nodiscard]] constexpr _T operator()() const noexcept { return value; }
 };
 
 template<bool _C, typename _TTrue, typename _TFalse>
@@ -85,5 +87,26 @@ struct _IsSame_t<_T, _T> { static constexpr bool value = true; };
 
 template<typename _T1, typename _T2>
 using IsSame = Constant<bool, _IsSame_t<_T1, _T2>::value>;
+
+template<typename ..._T>
+struct _BlockToFit_t;
+template<typename _TFirst, typename ..._TRest>
+struct _BlockToFit_t<_TFirst, _TRest...>
+{
+public:
+    static constexpr size_t size = sizeof(_TFirst) > _BlockToFit_t<_TRest...>::size
+        ? sizeof(_TFirst)
+        : _BlockToFit_t<_TRest...>::size;
+    using Type = uint8_t[size];
+};
+template<>
+struct _BlockToFit_t<>
+{
+public:
+    static constexpr size_t size = 0;
+    using Type = uint8_t[size];
+};
+template<typename ..._T>
+using BlockToFit = typename _BlockToFit_t<_T...>::Type;
 
 #endif

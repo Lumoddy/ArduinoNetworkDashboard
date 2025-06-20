@@ -243,6 +243,15 @@ public:
         return none;
     }
 
+    void clear() noexcept
+    {
+        const _T *const itEnd = _begin + _length;
+        for (_T *it = _begin; it < itEnd; ++it)
+            it->~_T();
+
+        _length = 0;
+    }
+
     /// #### Errors:
     /// - `ErrorTypes::HeapOverflow`
     Result<void> setCapacity(const size_t capacity) noexcept
