@@ -1,3 +1,4 @@
+import * as SerialMessage from "./serial-message.js";
 
 /**
 @export @typedef {bigint} NetworkID
@@ -6,6 +7,24 @@
 /**
 @export @typedef {NetworkID} NetworkNodeID
 */
+
+/**
+*/ const _networkIDEncodingFormat = /** @satisfies {SerialMessage.EncodingFormat} @type {const} */(
+    "Int64");
+/**
+*/ const _networkIDDecodingFormat = /** @satisfies {SerialMessage.DecodingFormat} @type {const} */(
+    _networkIDEncodingFormat);
+
+/**
+*/ const _messagePrefixEncodingFormat = /** @satisfies {SerialMessage.EncodingFormat} @type {const} */(
+["{}",
+    ["sender", _networkIDEncodingFormat],
+    ["targetPath", ["[]", _networkIDEncodingFormat]],
+    ["type", "Char8Array"],
+]);
+/**
+*/ const _messagePrefixDecodingFormat = /** @satisfies {SerialMessage.DecodingFormat} @type {const} */(
+    _messagePrefixEncodingFormat);
 
 /**
 @export @typedef {{

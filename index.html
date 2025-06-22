@@ -15,5 +15,13 @@
         style="position: absolute; top: 0; bottom: 0; left: 0; right: 0;"
         view-draggable>
     </network-graph-view>
+    <button onclick='
+        (async () =>
+        {
+            const p = await navigator.serial.requestPort();
+            p.open({ baudRate: 9600 });
+            await p.writable?.getWriter().write(new Uint8Array(["p".charCodeAt(0)]));
+        })()
+        '>Test</button>
 </body>
 </html>
