@@ -127,8 +127,8 @@ public:
         return result;
     }
 
-    [[nodiscard]] size_t length() { return _length; }
-    [[nodiscard]] size_t capacity() { return _capacity; }
+    [[nodiscard]] size_t length() const { return _length; }
+    [[nodiscard]] size_t capacity() const { return _capacity; }
 
     /// #### Requires:
     /// - `_TRest...` : Contains only `_T`.
@@ -337,9 +337,6 @@ public:
     [[nodiscard]] _T *begin() { return _begin; }
     [[nodiscard]] const _T *begin() const { return _begin; }
     [[nodiscard]] const _T *end() const { return _begin + _length; }
-
-    [[nodiscard]] _T *enumerate() { return _begin; }
-    [[nodiscard]] const _T *enumerate() const { return _begin; }
 
     List<_T> &operator=(const List<_T> &other) &noexcept
     {

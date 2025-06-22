@@ -116,8 +116,8 @@ public:
         return result;
     }
 
-    [[nodiscard]] size_t length() { return List<_T>::length(); }
-    [[nodiscard]] size_t capacity() { return List<_T>::capacity(); }
+    [[nodiscard]] size_t length() const { return List<_T>::length(); }
+    [[nodiscard]] size_t capacity() const { return List<_T>::capacity(); }
 
     /// #### Requires:
     /// - `_TRest...` : Contains only `_T`.
@@ -159,11 +159,11 @@ public:
 
     /// #### Errors:
     /// - `ErrorTypes::NotFound`
-    Result<size_t> indexOf(const _T &value) noexcept { return _binarySearch(List<_T>::_begin, 0, List<_T>::_length - 1, value); }
+    Result<size_t> indexOf(const _T &value) const noexcept { return _binarySearch(List<_T>::_begin, 0, List<_T>::_length - 1, value); }
 
-    size_t indexBefore(const _T &value) noexcept { return _binarySearchBefore(List<_T>::_begin, 0, List<_T>::_length - 1, value); }
+    size_t indexBefore(const _T &value) const noexcept { return _binarySearchBefore(List<_T>::_begin, 0, List<_T>::_length - 1, value); }
 
-    size_t indexAfter(const _T &value) noexcept { return _binarySearchBefore(List<_T>::_begin, 0, List<_T>::_length - 1, value); }
+    size_t indexAfter(const _T &value) const noexcept { return _binarySearchBefore(List<_T>::_begin, 0, List<_T>::_length - 1, value); }
 
     [[nodiscard]] _T *begin() { return List<_T>::begin(); }
     [[nodiscard]] const _T *begin() const { return List<_T>::begin(); }

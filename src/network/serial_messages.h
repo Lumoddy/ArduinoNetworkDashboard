@@ -7,62 +7,22 @@
 #include "../base/list.h"
 
 /// #### Requires:
-/// - `_T` : Implements `int operator()() const`
-template<typename _T = void>
-class SerialMessageReader;
-
-template<>
-class SerialMessageReader<void>
-{
-public:
-    virtual int read() const noexcept;
-};
-template<typename _T>
-class SerialMessageReader : public SerialMessageReader<void>
-{
-private:
-    const _T &_callback;
-
-public:
-    constexpr SerialMessageReader(const _T &callback) noexcept : _callback(callback) { }
-
-public:
-    int read() const noexcept override { return _callback(); }
-};
-
-struct SerialMessageDecoderError
-{
-public:
-    Error error;
-    size_t bytesReadBeforeError;
-
-public:
-    constexpr SerialMessageDecoderError(const Error error, const size_t bytesReadBeforeError) noexcept :
-        error(error),
-        bytesReadBeforeError(bytesReadBeforeError) { }
-    constexpr SerialMessageDecoderError(const SerialMessageDecoderError &original) noexcept :
-        error(original.error),
-        bytesReadBeforeError(original.bytesReadBeforeError) { }
-    constexpr SerialMessageDecoderError(SerialMessageDecoderError &&original) noexcept :
-        error(original.error),
-        bytesReadBeforeError(original.bytesReadBeforeError) { }
-
-    SerialMessageDecoderError &operator=(const SerialMessageDecoderError &value) & noexcept
-    {
-        error = value.error;
-        bytesReadBeforeError = value.bytesReadBeforeError;
-        return *this;
-    }
-    SerialMessageDecoderError &operator=(SerialMessageDecoderError &&value) & noexcept
-    {
-        error = value.error;
-        bytesReadBeforeError = value.bytesReadBeforeError;
-        return *this;
-    }
-};
-
-/// #### Requires:
-/// - `_T` : Primitive, Tuple or List.
+/// - `_T` : Any integer, a `Tuple`, a `List` or `List<void>` for a length value.
+/// #### Example
+/// ```
+/// SerialMessageDecoder<T> decoder;
+/// while (true)
+/// {
+///     const int read = Serial.timedRead();
+///     if (read == -1)
+///         return bad ErrorTypes::NotFound;
+///
+///     if (decoder.write((uint8_t)read))
+///         continue;
+///
+///     return decoder.result();
+/// }
+/// ```
 template<typename _T>
 class SerialMessageDecoder;
 
@@ -70,32 +30,28 @@ template<>
 class SerialMessageDecoder<uint8_t>
 {
 private:
-    const SerialMessageReader<> *_reader;
     uint8_t _result = 0;
     bool _isCompleted = false;
 
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<uint8_t> &&original) = default;
-    ~SerialMessageDecoder() = default;
+    constexpr SerialMessageDecoder() noexcept { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint8_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
     {
         if (_isCompleted)
-            return true;
-
-        const int byte = _reader->read();
-        if (byte == -1)
             return false;
 
-        _result = (uint8_t)byte;
+        _result = byte;
         _isCompleted = true;
-        return true;
+        return false;
     }
 
-    [[nodiscard]] bool available() const noexcept { return _isCompleted; }
+    [[nodiscard]] bool availableForWrite() const noexcept { return !_isCompleted; }
 
     uint8_t result() const noexcept { return _result; }
 
@@ -105,347 +61,242 @@ public:
         _isCompleted = false;
     }
 
-    SerialMessageDecoder<uint8_t> &operator=(SerialMessageDecoder<uint8_t> &&original) = default;
+    SerialMessageDecoder<uint8_t> &operator=(SerialMessageDecoder<uint8_t> &&original) noexcept = default;
 };
 
 template<>
 class SerialMessageDecoder<int8_t> : private SerialMessageDecoder<uint8_t>
 {
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        SerialMessageDecoder<uint8_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<int8_t> &&original) = default;
-    ~SerialMessageDecoder() = default;
+    constexpr SerialMessageDecoder() noexcept : SerialMessageDecoder<uint8_t>() { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int8_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept { return SerialMessageDecoder<uint8_t>::read(); }
-    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint8_t>::available(); }
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept { return SerialMessageDecoder<uint8_t>::write(byte); }
+    [[nodiscard]] bool availableForWrite() const noexcept { return SerialMessageDecoder<uint8_t>::availableForWrite(); }
     int8_t result() const noexcept { return (int8_t)SerialMessageDecoder<uint8_t>::result(); }
     void reset() noexcept { SerialMessageDecoder<uint8_t>::reset(); }
 
-    SerialMessageDecoder<int8_t> &operator=(SerialMessageDecoder<int8_t> &&original) = default;
+    SerialMessageDecoder<int8_t> &operator=(SerialMessageDecoder<int8_t> &&original) noexcept = default;
 };
 
 template<>
 class SerialMessageDecoder<uint16_t>
 {
 private:
-    const SerialMessageReader<> *_reader;
     uint16_t _result = 0;
-    uint8_t _state = 0;
+    uint8_t _shift = 0;
 
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<uint16_t> &&original) = default;
-    ~SerialMessageDecoder() = default;
+    constexpr SerialMessageDecoder() noexcept { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint16_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
     {
-        switch (_state)
-        {
-            default:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
+        if (_shift >= 16)
+            return false;
 
-                _result |= ((uint16_t)byte) << 0;
-                _state = 1;
-            }
-            case 1:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint16_t)byte) << 8;
-                _state = 2;
-            }
-            case 2:
-                return true;
-        }
+        _result |= (uint16_t)byte << _shift;
+        _shift += 8;
+        return _shift < 16;
     }
 
-    [[nodiscard]] bool available() const noexcept { return _state == 2; }
+    [[nodiscard]] bool availableForWrite() const noexcept
+    {
+        return _shift < 16;
+    }
 
     uint16_t result() const noexcept { return _result; }
 
     void reset() noexcept
     {
         _result = 0;
-        _state = 0;
+        _shift = 0;
     }
 
-    SerialMessageDecoder<uint16_t> &operator=(SerialMessageDecoder<uint16_t> &&original) = default;
+    SerialMessageDecoder<uint16_t> &operator=(SerialMessageDecoder<uint16_t> &&original) noexcept = default;
 };
 
 template<>
 class SerialMessageDecoder<int16_t> : private SerialMessageDecoder<uint16_t>
 {
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        SerialMessageDecoder<uint16_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<int16_t> &&original) = default;
-    ~SerialMessageDecoder() = default;
+    constexpr SerialMessageDecoder() noexcept : SerialMessageDecoder<uint16_t>() { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int16_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept { return SerialMessageDecoder<uint16_t>::read(); }
-    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint16_t>::available(); }
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept { return SerialMessageDecoder<uint16_t>::write(byte); }
+    [[nodiscard]] bool availableForWrite() const noexcept { return SerialMessageDecoder<uint16_t>::availableForWrite(); }
     int16_t result() const noexcept { return (int16_t)SerialMessageDecoder<uint16_t>::result(); }
     void reset() noexcept { SerialMessageDecoder<uint16_t>::reset(); }
 
-    SerialMessageDecoder<int16_t> &operator=(SerialMessageDecoder<int16_t> &&original) = default;
+    SerialMessageDecoder<int16_t> &operator=(SerialMessageDecoder<int16_t> &&original) noexcept = default;
 };
 
 template<>
 class SerialMessageDecoder<uint32_t>
 {
 private:
-    const SerialMessageReader<> *_reader;
     uint32_t _result = 0;
-    uint8_t _state = 0;
+    uint8_t _shift = 0;
 
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<uint32_t> &&original) = default;
-    ~SerialMessageDecoder() = default;
+    constexpr SerialMessageDecoder() noexcept { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint32_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
     {
-        switch (_state)
-        {
-            default:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
+        if (_shift >= 32)
+            return false;
 
-                _result |= ((uint32_t)byte) << 0;
-                _state = 1;
-            }
-            case 1:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint32_t)byte) << 8;
-                _state = 2;
-            }
-            case 2:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint32_t)byte) << 16;
-                _state = 3;
-            }
-            case 3:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint32_t)byte) << 24;
-                _state = 4;
-            }
-            case 4:
-                return true;
-        }
+        _result |= (uint32_t)byte << _shift;
+        _shift += 8;
+        return _shift < 32;
     }
 
-    [[nodiscard]] bool available() const noexcept { return _state == 4; }
+    [[nodiscard]] bool availableForWrite() const noexcept
+    {
+        return _shift < 32;
+    }
 
     uint32_t result() const noexcept { return _result; }
 
     void reset() noexcept
     {
         _result = 0;
-        _state = 0;
+        _shift = 0;
     }
 
-    SerialMessageDecoder<uint32_t> &operator=(SerialMessageDecoder<uint32_t> &&original) = default;
+    SerialMessageDecoder<uint32_t> &operator=(SerialMessageDecoder<uint32_t> &&original) noexcept = default;
 };
 
 template<>
 class SerialMessageDecoder<int32_t> : private SerialMessageDecoder<uint32_t>
 {
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        SerialMessageDecoder<uint32_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<int32_t> &&original) = default;
+    constexpr SerialMessageDecoder() noexcept : SerialMessageDecoder<uint32_t>() { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int32_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept { return SerialMessageDecoder<uint32_t>::read(); }
-    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint32_t>::available(); }
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept { return SerialMessageDecoder<uint32_t>::write(byte); }
+    [[nodiscard]] bool availableForWrite() const noexcept { return SerialMessageDecoder<uint32_t>::availableForWrite(); }
     int32_t result() const noexcept { return (int32_t)SerialMessageDecoder<uint32_t>::result(); }
     void reset() noexcept { SerialMessageDecoder<uint32_t>::reset(); }
 
-    SerialMessageDecoder<int32_t> &operator=(SerialMessageDecoder<int32_t> &&original) = default;
+    SerialMessageDecoder<int32_t> &operator=(SerialMessageDecoder<int32_t> &&original) noexcept = default;
 };
 
 template<>
 class SerialMessageDecoder<uint64_t>
 {
 private:
-    const SerialMessageReader<> *_reader;
     uint64_t _result = 0;
-    uint8_t _state = 0;
+    uint8_t _shift = 0;
 
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        _reader(&reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<uint64_t> &&original) = default;
-    ~SerialMessageDecoder() = default;
+    constexpr SerialMessageDecoder() noexcept { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<uint64_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
     {
-        switch (_state)
-        {
-            default:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
+        if (_shift >= 64)
+            return false;
 
-                _result |= ((uint64_t)byte) << 0;
-                _state = 1;
-            }
-            case 1:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint64_t)byte) << 8;
-                _state = 2;
-            }
-            case 2:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint64_t)byte) << 16;
-                _state = 3;
-            }
-            case 3:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint64_t)byte) << 24;
-                _state = 4;
-            }
-            case 4:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint64_t)byte) << 32;
-                _state = 5;
-            }
-            case 5:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint64_t)byte) << 40;
-                _state = 6;
-            }
-            case 6:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint64_t)byte) << 48;
-                _state = 7;
-            }
-            case 7:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result |= ((uint64_t)byte) << 56;
-                _state = 8;
-            }
-            case 8:
-                return true;
-        }
+        _result |= (uint64_t)byte << _shift;
+        _shift += 8;
+        return _shift < 64;
     }
 
-    [[nodiscard]] bool available() const noexcept { return _state == 8; }
+    [[nodiscard]] bool availableForWrite() const noexcept
+    {
+        return _shift < 64;
+    }
 
     uint64_t result() const noexcept { return _result; }
 
     void reset() noexcept
     {
         _result = 0;
-        _state = 0;
+        _shift = 0;
     }
 
-    SerialMessageDecoder<uint64_t> &operator=(SerialMessageDecoder<uint64_t> &&original) = default;
+    SerialMessageDecoder<uint64_t> &operator=(SerialMessageDecoder<uint64_t> &&original) noexcept = default;
 };
 
 template<>
 class SerialMessageDecoder<int64_t> : private SerialMessageDecoder<uint64_t>
 {
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        SerialMessageDecoder<uint64_t>(reader) { }
-    constexpr SerialMessageDecoder(SerialMessageDecoder<int64_t> &&original) = default;
-    ~SerialMessageDecoder() = default;
+    constexpr SerialMessageDecoder() noexcept : SerialMessageDecoder<uint64_t>() { }
+    constexpr SerialMessageDecoder(SerialMessageDecoder<int64_t> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
 
 public:
-    bool read() noexcept { return SerialMessageDecoder<uint64_t>::read(); }
-    [[nodiscard]] bool available() const noexcept { return SerialMessageDecoder<uint64_t>::available(); }
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept { return SerialMessageDecoder<uint64_t>::write(byte); }
+    [[nodiscard]] bool availableForWrite() const noexcept { return SerialMessageDecoder<uint64_t>::availableForWrite(); }
     int64_t result() const noexcept { return (int64_t)SerialMessageDecoder<uint64_t>::result(); }
     void reset() noexcept { SerialMessageDecoder<uint64_t>::reset(); }
 
-    SerialMessageDecoder<int64_t> &operator=(SerialMessageDecoder<int64_t> &&original) = default;
+    SerialMessageDecoder<int64_t> &operator=(SerialMessageDecoder<int64_t> &&original) noexcept = default;
 };
 
 template<typename _TFirst, typename _TSecond, typename ..._TRest>
 class SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>>
 {
 private:
-    using _FirstDecoder = SerialMessageDecoder<_TFirst>;
-    using _RestDecoder = SerialMessageDecoder<Tuple<_TSecond, _TRest...>>;
-    using _RestDecoderAndFirstValue = Tuple<_RestDecoder, _TFirst>;
-    using _ResultTuple = Tuple<_TFirst, _TSecond, _TRest...>;
-
-private:
     union _ValueUnion
     {
-        _FirstDecoder first;
-        _RestDecoderAndFirstValue second;
-        _ResultTuple result;
+        struct T1
+        {
+            SerialMessageDecoder<_TFirst> decoder;
+        }
+        _1;
+        struct T2
+        {
+            _TFirst first;
+            SerialMessageDecoder<Tuple<_TSecond, _TRest...>> decoder;
+        }
+        _2;
+        struct T3
+        {
+            Tuple<_TFirst, _TSecond, _TRest...> value;
+        }
+        _3;
 
-        constexpr _ValueUnion() { }
-        ~_ValueUnion() { }
+        constexpr _ValueUnion() noexcept { }
+        ~_ValueUnion() noexcept { }
     };
 
 private:
-    const SerialMessageReader<> *_reader;
     _ValueUnion _value;
     uint8_t _state = 0;
 
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        _reader(&reader) { }
-    SerialMessageDecoder(SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) :
-        _reader(original._reader)
+    constexpr SerialMessageDecoder() noexcept { }
+    SerialMessageDecoder(SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) noexcept
     {
         switch (original._state)
         {
@@ -454,130 +305,198 @@ public:
                 break;
             case 1:
                 _state = 1;
-                ::new (_value.first) _FirstDecoder(static_cast<_FirstDecoder &&>(original._value.first));
+                ::new (&_value._1) typename _ValueUnion::T1(
+                    static_cast<typename _ValueUnion::T1 &&>(original._value._1));
                 break;
             case 2:
                 _state = 2;
-                ::new (_value.second) _RestDecoderAndFirstValue(static_cast<_RestDecoderAndFirstValue &&>(original._value.second));
+                ::new (&_value._2) typename _ValueUnion::T2(
+                    static_cast<typename _ValueUnion::T2 &&>(original._value._2));
                 break;
             case 3:
                 _state = 3;
-                ::new (_value.result) _ResultTuple(static_cast<_ResultTuple &&>(original._value.result));
+                ::new (&_value._3) typename _ValueUnion::T3(
+                    static_cast<typename _ValueUnion::T3 &&>(original._value._3));
                 break;
         }
     }
-    ~SerialMessageDecoder()
+    ~SerialMessageDecoder() noexcept
     {
         switch (_state)
         {
             case 1:
-                _value.first.~_FirstDecoder();
+                _value._1.~T1();
                 break;
             case 2:
-                _value.second.~_RestDecoderAndFirstValue();
+                _value._2.~T2();
                 break;
             case 3:
-                _value.result.~_ResultTuple();
+                _value._3.~T3();
                 break;
         }
     }
 
 public:
-    bool read() noexcept
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
     {
         switch (_state)
         {
-            default:
+            case 0:
             {
-                ::new (&_value.first) _FirstDecoder(*_reader);
+                ::new (&_value._1) typename _ValueUnion::T1
+                {
+                    SerialMessageDecoder<_TFirst>(),
+                };
                 _state = 1;
             }
             case 1:
             {
-                if (!_value.first.read())
-                    return false;
+                if (_value._1.decoder.write(byte))
+                    return true;
 
-                _RestDecoderAndFirstValue newValue =
+                _TFirst firstValue = static_cast<_TFirst &&>(
+                    _value._1.decoder.result());
+
+                _value._1.~T1();
+
+                ::new (&_value._2) typename _ValueUnion::T2
                 {
-                    SerialMessageDecoder<Tuple<_TSecond, _TRest...>>(*_reader),
-                    static_cast<_TFirst &&>(_value.first.result()),
+                    static_cast<_TFirst &&>(firstValue),
+                    SerialMessageDecoder<Tuple<_TSecond, _TRest...>>(),
                 };
-                _value.first.~_FirstDecoder();
-                ::new (&_value.second) _RestDecoderAndFirstValue(static_cast<_RestDecoderAndFirstValue &&>(newValue));
                 _state = 2;
+                return true;
             }
             case 2:
             {
-                _RestDecoder &secondDecoder = at<0>(_value.second);
+                if (_value._2.decoder.write(byte))
+                    return true;
 
-                if (!secondDecoder.read())
-                    return false;
+                _TFirst first = static_cast<_TFirst &&>(_value._2.first);
 
-                _ResultTuple newValue =
+                Tuple<_TSecond, _TRest...> restValue = static_cast<Tuple<_TSecond, _TRest...> &&>(
+                    _value._2.decoder.result());
+
+                _value._2.~T2();
+
+                ::new (&_value._3) typename _ValueUnion::T3
                 {
-                    static_cast<_TFirst &&>(at<1>(_value.second)),
-                    static_cast<Tuple<_TSecond, _TRest...> &&>(secondDecoder.result()),
+                    Tuple<_TFirst, _TSecond, _TRest...>
+                    {
+                        static_cast<_TFirst &&>(first),
+                        static_cast<Tuple<_TSecond, _TRest...> &&>(restValue),
+                    },
                 };
-                _value.second.~_RestDecoderAndFirstValue();
-                ::new (&_value.result) _ResultTuple(static_cast<_ResultTuple &&>(newValue));
                 _state = 3;
+                return false;
             }
-            case 3:
-                return true;
+            default:
+                return false;
         }
     }
 
-    [[nodiscard]] bool available() const noexcept { return _state == 3; }
+    [[nodiscard]] bool availableForWrite() const noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            case 1:
+            case 2:
+                return true;
+            default:
+                return false;
+        }
+    }
 
-    [[nodiscard]] Tuple<_TFirst, _TSecond, _TRest...> &result() noexcept { return _value.result; }
-    [[nodiscard]] const Tuple<_TFirst, _TSecond, _TRest...> &result() const noexcept { return _value.result; }
+    Tuple<_TFirst, _TSecond, _TRest...> &result() noexcept { return _value._3.value; }
+    const Tuple<_TFirst, _TSecond, _TRest...> &result() const noexcept { return _value._3.value; }
 
     void reset() noexcept
     {
         switch (_state)
         {
             case 1:
-                _value.first.~_FirstDecoder();
+                _value._1.~T1();
                 break;
             case 2:
-                _value.second.~_RestDecoderAndFirstValue();
+                _value._2.~T2();
                 break;
             case 3:
-                _value.result.~_ResultTuple();
+                _value._3.~T3();
                 break;
         }
         _state = 0;
     }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) = default;
+    SerialMessageDecoder &operator=(SerialMessageDecoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) noexcept
+    {
+        switch (_state)
+        {
+            case 1:
+                _value._1.~T1();
+                break;
+            case 2:
+                _value._2.~T2();
+                break;
+            case 3:
+                _value._3.~T3();
+                break;
+        }
+
+        switch (original._state)
+        {
+            default:
+                _state = 0;
+                break;
+            case 1:
+                _state = 1;
+                ::new (&_value._1) typename _ValueUnion::T1(
+                    static_cast<typename _ValueUnion::T1 &&>(original._value._1));
+                break;
+            case 2:
+                _state = 2;
+                ::new (&_value._2) typename _ValueUnion::T2(
+                    static_cast<typename _ValueUnion::T2 &&>(original._value._2));
+                break;
+            case 3:
+                _state = 3;
+                ::new (&_value._3) typename _ValueUnion::T3(
+                    static_cast<typename _ValueUnion::T3 &&>(original._value._3));
+                break;
+        }
+    }
 };
 
 template<typename _TFirst>
 class SerialMessageDecoder<Tuple<_TFirst>>
 {
 private:
-    using _FirstDecoder = SerialMessageDecoder<_TFirst>;
-    using _ResultTuple = Tuple<_TFirst>;
-
-private:
     union _ValueUnion
     {
-        _FirstDecoder first;
-        _ResultTuple result;
+        struct T1
+        {
+            SerialMessageDecoder<_TFirst> decoder;
+        }
+        _1;
+        struct T2
+        {
+            Tuple<_TFirst> value;
+        }
+        _2;
 
-        constexpr _ValueUnion() { }
-        ~_ValueUnion() { }
+        constexpr _ValueUnion() noexcept { }
+        ~_ValueUnion() noexcept { }
     };
 
 private:
-    const SerialMessageReader<> *_reader;
     _ValueUnion _value;
     uint8_t _state = 0;
 
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        _reader(&reader) { }
-    SerialMessageDecoder(SerialMessageDecoder<Tuple<_TFirst>> &&original) : _reader(original._reader)
+    constexpr SerialMessageDecoder() noexcept { }
+    SerialMessageDecoder(SerialMessageDecoder<Tuple<_TFirst>> &&original) noexcept
     {
         switch (original._state)
         {
@@ -586,83 +505,106 @@ public:
                 break;
             case 1:
                 _state = 1;
-                ::new (_value.first) _FirstDecoder(static_cast<_FirstDecoder &&>(original._value.first));
+                ::new (&_value._1) typename _ValueUnion::T1(
+                    static_cast<typename _ValueUnion::T1 &&>(original._value._1));
                 break;
             case 2:
                 _state = 2;
-                ::new (_value.result) _ResultTuple(static_cast<_ResultTuple &&>(original._value.result));
+                ::new (&_value._2) typename _ValueUnion::T2(
+                    static_cast<typename _ValueUnion::T2 &&>(original._value._2));
                 break;
         }
     }
-    ~SerialMessageDecoder()
+    ~SerialMessageDecoder() noexcept
     {
         switch (_state)
         {
             case 1:
-                _value.first.~_FirstDecoder();
+                _value._1.~T1();
                 break;
             case 2:
-                _value.result.~_ResultTuple();
+                _value._2.~T2();
                 break;
         }
     }
 
 public:
-    bool read() noexcept
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
     {
         switch (_state)
         {
-            default:
+            case 0:
             {
-                ::new (&_value.first) decltype(_value.first)(*_reader);
+                ::new (&_value._1) typename _ValueUnion::T1
+                {
+                    SerialMessageDecoder<_TFirst>(),
+                };
                 _state = 1;
             }
             case 1:
             {
-                if (!_value.first.read())
-                    return false;
+                if (_value._1.decoder.write(byte))
+                    return true;
 
-                _ResultTuple newValue = _value.first.result();
-                _value.first.~_FirstDecoder();
-                ::new (&_value.result) _ResultTuple(static_cast<_ResultTuple &&>(newValue));
+                _TFirst firstValue = static_cast<_TFirst &&>(
+                    _value._1.decoder.result());
+
+                _value._1.~T1();
+
+                ::new (&_value._2) typename _ValueUnion::T2
+                {
+                    static_cast<_TFirst &&>(firstValue),
+                };
                 _state = 2;
+                return false;
             }
-            case 2:
-                return true;
+            default:
+                return false;
         }
     }
 
-    [[nodiscard]] bool available() const noexcept { return _state == 2; }
+    [[nodiscard]] bool availableForWrite() const noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            case 1:
+                return true;
+            default:
+                return false;
+        }
+    }
 
-    [[nodiscard]] Tuple<_TFirst> &result() noexcept { return _value.result; }
-    [[nodiscard]] const Tuple<_TFirst> &result() const noexcept { return _value.result; }
+    Tuple<_TFirst> &result() noexcept { return _value._2.value; }
+    const Tuple<_TFirst> &result() const noexcept { return _value._2.value; }
 
     void reset() noexcept
     {
         switch (_state)
         {
             case 1:
-                _value.first.~_FirstDecoder();
+                _value._1.~T1();
                 break;
             case 2:
-                _value.result.~_ResultTuple();
+                _value._2.~T2();
                 break;
         }
         _state = 0;
     }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder<Tuple<_TFirst>> &&original)
+    SerialMessageDecoder &operator=(SerialMessageDecoder<Tuple<_TFirst>> &&original) noexcept
     {
         switch (_state)
         {
             case 1:
-                _value.first.~_FirstDecoder();
+                _value._1.~T1();
                 break;
             case 2:
-                _value.result.~_ResultTuple();
+                _value._2.~T2();
                 break;
         }
-        _reader = original._reader;
         switch (original._state)
         {
             default:
@@ -670,104 +612,932 @@ public:
                 break;
             case 1:
                 _state = 1;
-                ::new (_value.first) _FirstDecoder(static_cast<_FirstDecoder &&>(original._value.first));
+                ::new (&_value._1) typename _ValueUnion::T1(
+                    static_cast<typename _ValueUnion::T1 &&>(_value._1));
                 break;
             case 2:
                 _state = 2;
-                ::new (_value.result) _ResultTuple(static_cast<_ResultTuple &&>(original._value.result));
+                ::new (&_value._2) typename _ValueUnion::T2(
+                    static_cast<typename _ValueUnion::T2 &&>(_value._2));
                 break;
         }
-
-        return *this;
     }
+};
+
+template<>
+class SerialMessageDecoder<List<void>>
+{
+private:
+    uint8_t _state = 0;
+    size_t _length = 0;
+
+public:
+    constexpr SerialMessageDecoder() noexcept { }
+    SerialMessageDecoder(SerialMessageDecoder<List<void>> &&original) noexcept = default;
+    ~SerialMessageDecoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            {
+                if (byte == 0xFF)
+                {
+                    _state = 1;
+                    return true;
+                }
+                else
+                {
+                    _state = 3;
+                    _length = byte;
+                    return false;
+                }
+            }
+            case 1:
+            {
+                _length = byte;
+                _state = 2;
+                return true;
+            }
+            case 2:
+            {
+                _length |= byte << 8;
+                _state = 3;
+                return false;
+            }
+            default:
+                return false;
+        }
+    }
+
+    [[nodiscard]] bool availableForWrite() const noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            case 1:
+            case 2:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    size_t result() const noexcept { return _length; }
+
+    void reset() noexcept
+    {
+        _state = 0;
+        _length = 0;
+    }
+
+    SerialMessageDecoder<List<void>> &operator=(SerialMessageDecoder<List<void>> &&original) noexcept = default;
 };
 
 template<typename _T>
 class SerialMessageDecoder<List<_T>>
 {
 private:
-    static constexpr size_t _indexIsStateBit = (sizeof(size_t) * 8) - 1;
-    static constexpr size_t _indexIsStateBitMask = 1 << _indexIsStateBit;
+    union _ValueUnion
+    {
+        struct T1
+        {
+            SerialMessageDecoder<List<void>> decoder;
+        }
+        _1;
+        struct T2
+        {
+            SerialMessageDecoder<_T> decoder;
+        }
+        _2;
+
+        constexpr _ValueUnion() noexcept { }
+        ~_ValueUnion() noexcept { }
+    };
 
 private:
-    const SerialMessageReader<> *_reader;
-    SerialMessageDecoder<_T> _decoder;
+    _ValueUnion _value;
     List<_T> _result;
-    size_t _index = _indexIsStateBitMask + 0;
-    uint8_t _firstHalfOfLength = 0;
+    size_t _length = maxof(size_t) - 0;
 
 public:
-    constexpr SerialMessageDecoder(const SerialMessageReader<> &reader) :
-        _reader(&reader),
-        _decoder(reader) { }
-    SerialMessageDecoder(SerialMessageDecoder<List<_T>> &&original) = default;
-    ~SerialMessageDecoder() = default;
-
-public:
-    bool read() noexcept
+    constexpr SerialMessageDecoder() noexcept { }
+    SerialMessageDecoder(SerialMessageDecoder<List<_T>> &&original) noexcept :
+        _result(static_cast<List<_T> &&>(original._result)),
+        _length(original._length)
     {
-        switch (_index)
+        switch (_length)
         {
-            case _indexIsStateBitMask + 0:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                if (byte != 0xFF)
-                {
-                    _result.setCapacity(byte & 0xFF);
-                    _index = 0;
-                    break;
-                }
-            }
-            case _indexIsStateBitMask + 1:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _firstHalfOfLength = byte & 0xFF;
-            }
-            case _indexIsStateBitMask + 2:
-            {
-                const int byte = _reader->read();
-                if (byte == -1)
-                    return false;
-
-                _result.setCapacity(_firstHalfOfLength | ((byte & 0xFF) << 8));
-                _index = 0;
+            case maxof(size_t) - 0:
                 break;
-            }
+            case maxof(size_t) - 1:
+                ::new (&_value._1) typename _ValueUnion::T1(static_cast<typename _ValueUnion::T1 &&>(original._value._1));
+                break;
+            default:
+                ::new (&_value._2) typename _ValueUnion::T2(static_cast<typename _ValueUnion::T2 &&>(original._value._2));
+                break;
         }
-
-        for (; _index < _result.length(); ++_index)
+    }
+    ~SerialMessageDecoder() noexcept
+    {
+        switch (_length)
         {
-            if (!_decoder.read())
-                return false;
-
-            _T newValue = static_cast<_T &&>(_decoder.result());
-            _decoder.reset();
-
-            _result.add(static_cast<_T &&>(newValue));
+            case maxof(size_t) - 0:
+                break;
+            case maxof(size_t) - 1:
+                _value._1.~T1();
+                break;
+            default:
+                _value._2.~T2();
+                break;
         }
-
-        return true;
     }
 
-    [[nodiscard]] bool available() const noexcept { return _index == _result.length(); }
+public:
+    /// #### Returns:
+    /// `true` if another write is required.
+    bool write(uint8_t byte) noexcept
+    {
+        switch (_length)
+        {
+            case maxof(size_t) - 0:
+            {
+                ::new (&_value._1) typename _ValueUnion::T1
+                {
+                    SerialMessageDecoder<List<void>>(),
+                };
+                _length = maxof(size_t) - 1;
+            }
+            case maxof(size_t) - 1:
+            {
+                if (_value._1.decoder.write(byte))
+                    return true;
 
-    [[nodiscard]] List<_T> &result() noexcept { return _result; }
-    [[nodiscard]] const List<_T> &result() const noexcept { return _result; }
+                _length = _value._1.decoder.result();
+
+                _value._1.~T1();
+                ::new (&_value._2) typename _ValueUnion::T2
+                {
+                    SerialMessageDecoder<_T>(),
+                };
+
+                return _length != 0;
+            }
+            default:
+            {
+                if (_result.length() >= _length)
+                    return false;
+
+                if (_value._2.decoder.write(byte))
+                    return true;
+
+                _result.add(_value._2.decoder.result());
+                _value._2.decoder.reset();
+
+                return _result.length() < _length;
+            }
+        }
+    }
+
+    [[nodiscard]] bool availableForWrite() const noexcept
+    {
+        return _result.length() < _length;
+    }
+
+    List<_T> &result() noexcept { return _result; }
+    const List<_T> &result() const noexcept { return _result; }
+
+    void reset() noexcept
+    {
+        switch (_length)
+        {
+            case maxof(size_t) - 0:
+                break;
+            case maxof(size_t) - 1:
+                _value._1.~T1();
+                break;
+            default:
+                _value._2.~T2();
+                break;
+        }
+
+        _result.clear();
+        _length = maxof(size_t) - 0;
+    }
+
+    SerialMessageDecoder &operator=(SerialMessageDecoder<List<_T>> &&original) noexcept
+    {
+        switch (_length)
+        {
+            case maxof(size_t) - 0:
+                break;
+            case maxof(size_t) - 1:
+                _value._1.~T1();
+                break;
+            default:
+                _value._2.~T2();
+                break;
+        }
+
+        _result = static_cast<List<_T> &&>(original._result);
+        _length = original._length;
+
+        switch (original._length)
+        {
+            case maxof(size_t) - 0:
+                break;
+            case maxof(size_t) - 1:
+                ::new (&_value._1) typename _ValueUnion::T1(static_cast<typename _ValueUnion::T1 &&>(original._value._1));
+                break;
+            default:
+                ::new (&_value._2) typename _ValueUnion::T2(static_cast<typename _ValueUnion::T2 &&>(original._value._2));
+                break;
+        }
+    }
+};
+
+/// #### Requires:
+/// - `_T` : Any integer, a `Tuple`, a `List` or `List<void>` for a length value.
+/// #### Example
+/// ```
+/// SerialMessageEncoder<T> encoder(value);
+/// while (true)
+/// {
+///     int read = encoder.read();
+///     if (read == -1)
+///         break;
+///
+///     something((uint8_t)read);
+/// }
+/// ```
+template<typename _T>
+class SerialMessageEncoder;
+
+template<>
+class SerialMessageEncoder<uint8_t>
+{
+private:
+    uint8_t _value;
+    bool _hasRead = false;
+
+public:
+    constexpr SerialMessageEncoder(const uint8_t value) noexcept : _value(value) { }
+    SerialMessageEncoder(SerialMessageEncoder<uint8_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept
+    {
+        if (_hasRead)
+            return -1;
+
+        _hasRead = true;
+        return _value;
+    }
+
+    [[nodiscard]] bool available() const noexcept { return !_hasRead; }
+
+    void reset() noexcept
+    {
+        _hasRead = false;
+    }
+    void reset(const uint8_t newValue) noexcept
+    {
+        reset();
+        _value = newValue;
+    }
+
+    SerialMessageEncoder<uint8_t> &operator=(SerialMessageEncoder<uint8_t> &&original) noexcept = default;
+};
+
+template<>
+class SerialMessageEncoder<int8_t> : private SerialMessageEncoder<uint8_t>
+{
+public:
+    constexpr SerialMessageEncoder(const int8_t value) noexcept : SerialMessageEncoder<uint8_t>((uint8_t)value) { }
+    SerialMessageEncoder(SerialMessageEncoder<int8_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept { return SerialMessageEncoder<uint8_t>::read(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageEncoder<uint8_t>::available(); }
+    void reset() { return SerialMessageEncoder<uint8_t>::reset(); }
+    void reset(const int8_t newValue) { return SerialMessageEncoder<uint8_t>::reset(newValue); }
+
+    SerialMessageEncoder<int8_t> &operator=(SerialMessageEncoder<int8_t> &&original) = default;
+};
+
+template<>
+class SerialMessageEncoder<uint16_t>
+{
+private:
+    uint16_t _value;
+    uint8_t _shift = 0;
+
+public:
+    constexpr SerialMessageEncoder(const uint16_t value) noexcept : _value(value) { }
+    SerialMessageEncoder(SerialMessageEncoder<uint16_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept
+    {
+        if (_shift == 16)
+            return -1;
+
+        uint8_t result = (uint8_t)(_value >> _shift);
+        _shift += 8;
+        return result;
+    }
+
+    [[nodiscard]] bool available() const noexcept { return _shift < 16; }
+
+    void reset() noexcept
+    {
+        _shift = 0;
+    }
+    void reset(const uint16_t newValue) noexcept
+    {
+        reset();
+        _value = newValue;
+    }
+
+    SerialMessageEncoder<uint16_t> &operator=(SerialMessageEncoder<uint16_t> &&original) noexcept = default;
+};
+
+template<>
+class SerialMessageEncoder<int16_t> : private SerialMessageEncoder<uint16_t>
+{
+public:
+    constexpr SerialMessageEncoder(const int16_t value) noexcept : SerialMessageEncoder<uint16_t>((uint16_t)value) { }
+    SerialMessageEncoder(SerialMessageEncoder<int16_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept { return SerialMessageEncoder<uint16_t>::read(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageEncoder<uint16_t>::available(); }
+    void reset() { return SerialMessageEncoder<uint16_t>::reset(); }
+    void reset(const int16_t newValue) { return SerialMessageEncoder<uint16_t>::reset(newValue); }
+
+    SerialMessageEncoder<int16_t> &operator=(SerialMessageEncoder<int16_t> &&original) = default;
+};
+
+template<>
+class SerialMessageEncoder<uint32_t>
+{
+private:
+    uint32_t _value;
+    uint8_t _shift = 0;
+
+public:
+    constexpr SerialMessageEncoder(const uint32_t value) noexcept : _value(value) { }
+    SerialMessageEncoder(SerialMessageEncoder<uint32_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept
+    {
+        if (_shift == 32)
+            return -1;
+
+        uint8_t result = (uint8_t)(_value >> _shift);
+        _shift += 8;
+        return result;
+    }
+
+    [[nodiscard]] bool available() const noexcept { return _shift < 32; }
+
+    void reset() noexcept
+    {
+        _shift = 0;
+    }
+    void reset(const uint32_t newValue) noexcept
+    {
+        reset();
+        _value = newValue;
+    }
+
+    SerialMessageEncoder<uint32_t> &operator=(SerialMessageEncoder<uint32_t> &&original) noexcept = default;
+};
+
+template<>
+class SerialMessageEncoder<int32_t> : private SerialMessageEncoder<uint32_t>
+{
+public:
+    constexpr SerialMessageEncoder(const int32_t value) noexcept : SerialMessageEncoder<uint32_t>((uint32_t)value) { }
+    SerialMessageEncoder(SerialMessageEncoder<int32_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept { return SerialMessageEncoder<uint32_t>::read(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageEncoder<uint32_t>::available(); }
+    void reset() { return SerialMessageEncoder<uint32_t>::reset(); }
+    void reset(const int32_t newValue) { return SerialMessageEncoder<uint32_t>::reset(newValue); }
+
+    SerialMessageEncoder<int32_t> &operator=(SerialMessageEncoder<int32_t> &&original) = default;
+};
+
+template<>
+class SerialMessageEncoder<uint64_t>
+{
+private:
+    uint64_t _value;
+    uint8_t _shift = 0;
+
+public:
+    constexpr SerialMessageEncoder(const uint64_t value) noexcept : _value(value) { }
+    SerialMessageEncoder(SerialMessageEncoder<uint64_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept
+    {
+        if (_shift == 64)
+            return -1;
+
+        uint8_t result = (uint8_t)(_value >> _shift);
+        _shift += 8;
+        return result;
+    }
+
+    [[nodiscard]] bool available() const noexcept { return _shift < 64; }
+
+    void reset() noexcept
+    {
+        _shift = 0;
+    }
+    void reset(const uint64_t newValue) noexcept
+    {
+        reset();
+        _value = newValue;
+    }
+
+    SerialMessageEncoder<uint64_t> &operator=(SerialMessageEncoder<uint64_t> &&original) noexcept = default;
+};
+
+template<>
+class SerialMessageEncoder<int64_t> : private SerialMessageEncoder<uint64_t>
+{
+public:
+    constexpr SerialMessageEncoder(const int64_t value) noexcept : SerialMessageEncoder<uint64_t>((uint64_t)value) { }
+    SerialMessageEncoder(SerialMessageEncoder<int64_t> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept { return SerialMessageEncoder<uint64_t>::read(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageEncoder<uint64_t>::available(); }
+    void reset() { return SerialMessageEncoder<uint64_t>::reset(); }
+    void reset(const int64_t newValue) { return SerialMessageEncoder<uint64_t>::reset(newValue); }
+
+    SerialMessageEncoder<int64_t> &operator=(SerialMessageEncoder<int64_t> &&original) = default;
+};
+
+template<typename _TFirst, typename _TSecond, typename ..._TRest>
+class SerialMessageEncoder<Tuple<_TFirst, _TSecond, _TRest...>>
+{
+private:
+    union _ValueUnion
+    {
+        struct T1
+        {
+            SerialMessageEncoder<_TFirst> encoder;
+        }
+        _1;
+        struct T2
+        {
+            SerialMessageEncoder<Tuple<_TSecond, _TRest...>> encoder;
+        }
+        _2;
+
+        constexpr _ValueUnion() noexcept { }
+        ~_ValueUnion() noexcept { }
+    };
+
+private:
+    const Tuple<_TFirst, _TSecond, _TRest...> *_value;
+    _ValueUnion _stateValue;
+    uint8_t _state = 0;
+
+public:
+    constexpr SerialMessageEncoder(const Tuple<_TFirst, _TSecond, _TRest...> &value) noexcept :
+        _value(&value) { }
+    SerialMessageEncoder(SerialMessageEncoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) noexcept :
+        _value(original._value)
+    {
+        switch (original._state)
+        {
+            case 0:
+                _state = 0;
+            case 1:
+                ::new (&_stateValue._1) typename _ValueUnion::T1(
+                    static_cast<typename _ValueUnion::T1 &&>(original._stateValue._1));
+                _state = 1;
+            case 2:
+                ::new (&_stateValue._2) typename _ValueUnion::T2(
+                    static_cast<typename _ValueUnion::T2 &&>(original._stateValue._2));
+                _state = 2;
+            default:
+                _state = 3;
+        }
+    }
+    ~SerialMessageEncoder() noexcept
+    {
+        switch (_state)
+        {
+            case 1:
+                _stateValue._1.~T1();
+            case 2:
+                _stateValue._2.~T2();
+        }
+    }
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            {
+                ::new (&_stateValue._1) typename _ValueUnion::T1
+                {
+                    SerialMessageEncoder<_TFirst>(at<0>(*_value)),
+                };
+                _state = 1;
+            }
+            case 1:
+            {
+                int read = _stateValue._1.encoder.read();
+                if (read != -1)
+                    return read;
+
+                _stateValue._1.~T1();
+
+                ::new (&_stateValue._2) typename _ValueUnion::T2
+                {
+                    SerialMessageEncoder<Tuple<_TSecond, _TRest...>>(
+                        *static_cast<const Tuple<_TSecond, _TRest...> *>(static_cast<const void *>(_value))),
+                };
+                _state = 2;
+            }
+            case 2:
+            {
+                int read = _stateValue._2.encoder.read();
+                if (read != -1)
+                    return read;
+
+                _stateValue._2.~T2();
+
+                _state = 3;
+            }
+            default:
+                return -1;
+        }
+    }
+
+    [[nodiscard]] bool available() const noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            case 1:
+            case 2:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    void reset() noexcept
+    {
+        switch (_state)
+        {
+            case 1:
+                _stateValue._1.~T1();
+            case 2:
+                _stateValue._2.~T2();
+        }
+        _state = 0;
+    }
+    void reset(const Tuple<_TFirst, _TSecond, _TRest...> &newValue) noexcept
+    {
+        reset();
+        _value = &newValue;
+    }
+
+    SerialMessageEncoder<Tuple<_TFirst, _TSecond, _TRest...>> &operator=(SerialMessageEncoder<Tuple<_TFirst, _TSecond, _TRest...>> &&original) noexcept
+    {
+        switch (_state)
+        {
+            case 1:
+                _stateValue._1.~T1();
+            case 2:
+                _stateValue._2.~T2();
+        }
+
+        switch (original._state)
+        {
+            case 0:
+                _state = 0;
+            case 1:
+                ::new (&_stateValue._1) typename _ValueUnion::T1(static_cast<typename _ValueUnion::T1 &&>(original._stateValue._1));
+                _state = 1;
+            case 2:
+                ::new (&_stateValue._2) typename _ValueUnion::T2(static_cast<typename _ValueUnion::T2 &&>(original._stateValue._2));
+                _state = 2;
+            default:
+                _state = 3;
+        }
+    }
+};
+
+template<typename _TFirst>
+class SerialMessageEncoder<Tuple<_TFirst>> : private SerialMessageEncoder<_TFirst>
+{
+public:
+    constexpr SerialMessageEncoder(const Tuple<_TFirst> &value) noexcept : SerialMessageEncoder<_TFirst>(at<0>(value)) { }
+    SerialMessageEncoder(SerialMessageEncoder<Tuple<_TFirst>> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept { return SerialMessageEncoder<_TFirst>::read(); }
+    [[nodiscard]] bool available() const noexcept { return SerialMessageEncoder<_TFirst>::available(); }
+    void reset() { return SerialMessageEncoder<_TFirst>::reset(); }
+    void reset(const Tuple<_TFirst> &newValue) { return SerialMessageEncoder<_TFirst>::reset(at<0>(newValue)); }
+
+    SerialMessageEncoder<Tuple<_TFirst>> &operator=(SerialMessageEncoder<Tuple<_TFirst>> &&original) = default;
+};
+
+template<>
+class SerialMessageEncoder<List<void>>
+{
+private:
+    size_t _length;
+    uint8_t _state = 0;
+
+public:
+    constexpr SerialMessageEncoder(size_t length) noexcept : _length(length) { }
+    SerialMessageEncoder(SerialMessageEncoder<List<void>> &&original) noexcept = default;
+    ~SerialMessageEncoder() noexcept = default;
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            {
+                if (_length < 0xFF)
+                {
+                    _state = 3;
+                    return _length;
+                }
+                else
+                {
+                    _state = 1;
+                    return 0xFF;
+                }
+            }
+            case 1:
+            {
+                _state = 2;
+                return (uint8_t)(_length >> 0);
+            }
+            case 2:
+            {
+                _state = 3;
+                return (uint8_t)(_length >> 8);
+            }
+            default:
+                return -1;
+        }
+    }
+
+    [[nodiscard]] bool available() const noexcept
+    {
+        switch (_state)
+        {
+            case 0:
+            case 1:
+            case 2:
+                return true;
+            default:
+                return false;
+        }
+    }
 
     void reset()
     {
-        _decoder.reset();
-        _result.clear();
-        _index = 0;
+        _state = 0;
+    }
+    void reset(const size_t &newValue)
+    {
+        reset();
+        _length = newValue;
     }
 
-    SerialMessageDecoder &operator=(SerialMessageDecoder<List<_T>> &&original) = default;
+    SerialMessageEncoder<List<void>> &operator=(SerialMessageEncoder<List<void>> &&original) = default;
+};
+
+template<typename _T>
+class SerialMessageEncoder<List<_T>>
+{
+private:
+    union _ValueUnion
+    {
+        struct T1
+        {
+            SerialMessageEncoder<List<void>> encoder;
+        }
+        _1;
+        struct T2
+        {
+            SerialMessageEncoder<_T> encoder;
+        }
+        _2;
+
+        constexpr _ValueUnion() noexcept { }
+        ~_ValueUnion() noexcept { }
+    };
+
+private:
+    const List<_T> *_value;
+    _ValueUnion _stateValue;
+    size_t _index = maxof(size_t) - 0;
+
+public:
+    constexpr SerialMessageEncoder(const List<_T> &value) noexcept :
+        _value(&value) { }
+    SerialMessageEncoder(SerialMessageEncoder<List<_T>> &&original) noexcept :
+        _value(original._value),
+        _index(original._index)
+    {
+        switch (original._index)
+        {
+            case maxof(size_t) - 0:
+            case maxof(size_t) - 1:
+                break;
+            default:
+                ::new (&_stateValue._1) typename _ValueUnion::T1(static_cast<typename _ValueUnion::T1 &&>(original._stateValue._1));
+                break;
+        }
+    };
+    ~SerialMessageEncoder() noexcept
+    {
+        switch (_index)
+        {
+            case maxof(size_t) - 0:
+            case maxof(size_t) - 1:
+                break;
+            default:
+                _stateValue._1.~T1();
+                break;
+        }
+    }
+
+public:
+    /// #### Returns:
+    /// `uint8_t` or `-1` if the end has been reached.
+    int read() noexcept
+    {
+        switch (_index)
+        {
+            case maxof(size_t) - 0:
+            {
+                ::new (&_stateValue._1) typename _ValueUnion::T1
+                {
+                    SerialMessageEncoder<List<void>>(_value->length()),
+                };
+
+                _index = maxof(size_t) - 1;
+            }
+            case maxof(size_t) - 1:
+            {
+                int read = _stateValue._1.encoder.read();
+                if (read != -1)
+                    return read;
+
+                _stateValue._1.~T1();
+
+                if (_value->length() != 0)
+                {
+                    ::new (&_stateValue._2) typename _ValueUnion::T2
+                    {
+                        SerialMessageEncoder<_T>(_value->operator[](0)),
+                    };
+                }
+
+                _index = 0;
+            }
+            default:
+            {
+                if (_index >= _value->length())
+                    return -1;
+
+                int read = _stateValue._2.encoder.read();
+                if (read != -1)
+                    return read;
+
+                _index++;
+
+                if (_index >= _value->length())
+                    return -1;
+
+                _stateValue._2.encoder.reset(_value->operator[](_index));
+
+                return _stateValue._2.encoder.read();
+            }
+        }
+    }
+
+    [[nodiscard]] bool available() const noexcept
+    {
+        switch (_index)
+        {
+            case maxof(size_t) - 0:
+                return true;
+            case maxof(size_t) - 1:
+                return _value->length() != 0 || _stateValue._1.encoder.available();
+            default:
+            {
+                size_t length = _value->length();
+                if (_index < length)
+                    return _index < length - 1 || _stateValue._2.encoder.available();
+                else
+                    return false;
+            }
+        }
+    }
+
+    void reset()
+    {
+        switch (_index)
+        {
+            case maxof(size_t) - 0:
+            case maxof(size_t) - 1:
+                break;
+            default:
+                _stateValue._1.~T1();
+                break;
+        }
+        _index = maxof(size_t) - 0;
+    }
+    void reset(const List<_T> &newValue)
+    {
+        reset();
+        _value = &newValue;
+    }
+
+    SerialMessageEncoder<List<_T>> &operator=(SerialMessageEncoder<List<_T>> &&original)
+    {
+        switch (_index)
+        {
+            case maxof(size_t) - 0:
+            case maxof(size_t) - 1:
+                break;
+            default:
+                _stateValue._1.~T1();
+                break;
+        }
+
+        _value = original._value;
+        _index = original._index;
+
+        switch (original._index)
+        {
+            case maxof(size_t) - 0:
+            case maxof(size_t) - 1:
+                break;
+            default:
+                ::new (&_stateValue._1) typename _ValueUnion::T1(static_cast<typename _ValueUnion::T1 &&>(original._stateValue._1));
+                break;
+        }
+    }
 };
 
 #endif

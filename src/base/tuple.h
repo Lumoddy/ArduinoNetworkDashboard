@@ -14,16 +14,6 @@ struct _TupleAt_t<_I, _TFirst, _TRest...>
 public:
     using Type = typename _TupleAt_t<_I - 1, _TRest...>::Type;
     using TupleSubType = typename _TupleAt_t<_I - 1, _TRest...>::TupleSubType;
-
-public:
-    [[nodiscard]] static constexpr Type &elementAt(Tuple<_TFirst, _TRest...> &tuple) noexcept
-    {
-        return _TupleAt_t<_I - 1, _TRest...>::template elementAt<_I - 1>(tuple);
-    }
-    [[nodiscard]] static constexpr const Type &elementAt(const Tuple<_TFirst, _TRest...> &tuple) noexcept
-    {
-        return _TupleAt_t<_I - 1, _TRest...>::template elementAt<_I - 1>(tuple);
-    }
 };
 template<typename _TFirst, typename ..._TRest>
 struct _TupleAt_t<0, _TFirst, _TRest...>
@@ -31,16 +21,6 @@ struct _TupleAt_t<0, _TFirst, _TRest...>
 public:
     using Type = _TFirst;
     using TupleSubType = Tuple<_TFirst, _TRest...>;
-
-public:
-    [[nodiscard]] static constexpr Type &elementAt(Tuple<_TFirst, _TRest...> &tuple) noexcept
-    {
-        return tuple._value;
-    }
-    [[nodiscard]] static constexpr const Type &elementAt(const Tuple<_TFirst, _TRest...> &tuple) noexcept
-    {
-        return tuple._value;
-    }
 };
 template<size_t _I>
 struct _TupleAt_t<_I>
@@ -59,10 +39,10 @@ struct Tuple<_TFirst, _TRest...> : private Tuple<_TRest...>
     friend class _TupleAt_t;
 
     template<size_t _I, typename ..._T>
-    friend constexpr inline typename _TupleAt_t<_I, _T...>::Type &at(Tuple<_T...> &tuple) noexcept;
+    friend constexpr inline typename _TupleAt_t<_I, _T...>::Type &at(Tuple<_T...> &) noexcept;
 
     template<size_t _I, typename ..._T>
-    friend constexpr inline const typename _TupleAt_t<_I, _T...>::Type &at(const Tuple<_T...> &tuple) noexcept;
+    friend constexpr inline const typename _TupleAt_t<_I, _T...>::Type &at(const Tuple<_T...> &) noexcept;
 
 public:
     static constexpr size_t length = 1 + Tuple<_TRest...>::length;

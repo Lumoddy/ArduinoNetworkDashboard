@@ -6,96 +6,185 @@
 #include "./base/sorted_list.h"
 #include "./base/tuple.h"
 #include "./network/serial_messages.h"
+#include "./board_setup.h"
 
 void setup()
 {
     pinMode(LED_BUILTIN, OUTPUT);
+    Serial.begin(baudRate);
+    primarySerial.begin(baudRate);
 }
 
-void show(bool success)
+void pulse(bool success = true)
 {
     digitalWrite(LED_BUILTIN, success ? HIGH : LOW);
-    delay(700);
+    delay(200);
     digitalWrite(LED_BUILTIN, LOW);
     delay(100);
 }
 
-struct E
+void separatePulse()
 {
-    signed char operator()(int a, int b)
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(800);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(800);
+}
+
+void failPulse()
+{
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(50);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(50);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(50);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(50);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(50);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(600);
+}
+
+int timedRead(Stream &stream)
+{
+    int c;
+    auto _startMillis = millis();
+    do
     {
-        return b - a;
+        c = stream.read();
+        if (c != -1)
+            return c;
     }
-};
+    while(millis() - _startMillis < 1000);
+    return -1;
+}
+
+void handleTestCommands()
+{
+    if (Serial.available())
+    {
+        uint8_t read = (uint8_t)Serial.read();
+        switch (read)
+        {
+            case 'p':
+            {
+                pulse();
+                break;
+            }
+            case '+':
+            {
+                digitalWrite(LED_BUILTIN, HIGH);
+
+                SerialMessageDecoder<Tuple<int32_t, int32_t>> decoder;
+
+                while (true)
+                {
+                    int read = timedRead(Serial);
+                    if (read == -1)
+                    {
+                        failPulse();
+                        return;
+                    }
+
+                    if (!decoder.write((uint8_t)read))
+                        break;
+                }
+
+                auto input = decoder.result();
+
+                SerialMessageEncoder<int32_t> encoder(at<0>(input) + at<1>(input));
+
+                while (true)
+                {
+                    if (!encoder.available())
+                        break;
+
+                    Serial.write((uint8_t)encoder.read());
+                }
+
+                digitalWrite(LED_BUILTIN, LOW);
+
+                break;
+            }
+            case 's':
+            {
+                digitalWrite(LED_BUILTIN, HIGH);
+
+                SerialMessageDecoder<List<unsigned char>> decoder;
+
+                while (true)
+                {
+                    int read = timedRead(Serial);
+                    if (read == -1)
+                    {
+                        failPulse();
+                        return;
+                    }
+
+                    if (!decoder.write((uint8_t)read))
+                        break;
+                }
+
+                auto input = decoder.result();
+
+                SerialMessageEncoder<List<unsigned char>> encoder(input);
+
+                while (true)
+                {
+                    if (!encoder.available())
+                        break;
+
+                    Serial.write((uint8_t)encoder.read());
+                }
+
+                digitalWrite(LED_BUILTIN, LOW);
+
+                break;
+            }
+            case 'r':
+            {
+                digitalWrite(LED_BUILTIN, HIGH);
+
+                while (true)
+                {
+                    int read = timedRead(Serial);
+                    if (read == -1)
+                        break;
+
+                    primarySerial.write((uint8_t)read);
+                }
+
+                digitalWrite(LED_BUILTIN, LOW);
+
+                break;
+            }
+            default:
+            {
+                failPulse();
+            }
+        }
+    }
+
+    if (primarySerial.available())
+    {
+        digitalWrite(LED_BUILTIN, HIGH);
+
+        while (true)
+        {
+            int read = timedRead(primarySerial);
+            if (read == -1)
+                break;
+
+            Serial.write((uint8_t)read);
+        }
+
+        digitalWrite(LED_BUILTIN, LOW);
+    }
+}
 
 void loop()
 {
-    // Optional<A> v1 = A();
-    // Optional<char> v2 = 'a';
-    // Optional<char> v3 = none;
-    // Optional<char &> v4 = *v2;
-    // auto a = *v4;
-
-    // Result<A, E> v1 = A();
-    // Result<char, E> v2 = 'a';
-    // Result<char, E> v3 = bad E();
-    // auto a = *v2;
-
-    // Shared<A> v1 = A();
-    // Shared<A> v2 = v1;
-    // Shared<A> v3 = v2;
-
-    SortedList<char> sortedList = SortedList<char>();
-
-    List<char> list = List<char>();
-
-    list.add('|', 'a');
-    list.add('|', 'a', 'a');
-    list.add('|', 'a', 'a', 'a');
-    list.add('|');
-
-    List<char> clone = list;
-
-    list.setCapacity(10);
-
-    // Result<char> r = 'a';
-    // show(r);
-
-    // r = bad;
-    // show(!r);
-
-    // show(r == bad);
-
-    // r = Result<char>('b');
-    // show(r != bad);
-    // show(r == 'b');
-    // show(r != 'a');
-
-    // show(r == Result<char>('b'));
-    // show(r != Result<char>('a'));
-    // show(Result<char>('a') | Result<char>('b'));
-    // show(Result<char>('a') & Result<char>('b'));
-    // show(!(Result<char>('a') & bad));
-    // show(Result<char>(bad) | Result<char>('a'));
-
-    // show(Result<char>(bad) | []() -> Result<char> { return 'a'; });
-    // bool used = false;
-    // show(Result<char>(bad) & +[&]() -> Result<char> { used = true; return 'a'; });
-
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(100);
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(100);
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(1100);
-
-    SerialMessageReader<int (*)()> reader([]{ return Serial.read(); });
-    SerialMessageDecoder<Tuple<int32_t, int64_t, int8_t>> decoder(reader);
-    SerialMessageDecoder<List<int64_t>> asdecoder(reader);
+    handleTestCommands();
 }
