@@ -1,124 +1,127 @@
-use super::decoder::*;
-use core::mem::take;
 use heapless::Vec;
 
+use super::decoder::*;
+use super::take;
+
 #[derive(Default)]
-pub enum DecoderVec<T: TryDecodable, const N: usize, E: Default>
-    where T::Decoder: TryDecoder<T, Error = E> + Default
+pub enum DecodeVec<T, const N: usize, E>
+    where T: Decodable<u8, DecoderError = E>,
+        T::Decoder: Decode<T, u8> + Default,
+        E: Default
 {
     #[default]
     Ready,
-    ProgressLength(DecoderUSize),
+    ProgressLength(DecodeUSize),
     ProgressVec(Vec<T, N>, usize, T::Decoder),
     Done(Vec<T, N>),
 }
 
-impl<T: TryDecodable, const N: usize, E: Default> DecoderVec<T, N, E>
-    where T::Decoder: TryDecoder<T, Error = E> + Default
+impl<T, const N: usize, E> DecodeVec<T, N, E>
+    where T: Decodable<u8, DecoderError = E>,
+        T::Decoder: Decode<T, u8> + Default,
+        E: Default
 {
     pub const fn new() -> Self { Self::Ready }
 }
 
-impl<T: TryDecodable, const N: usize, E: Default> DecoderReader<Vec<T, N>>
-    for DecoderVec<T, N, E>
-    where T::Decoder: TryDecoder<T, Error = E> + Default
+impl<T, const N: usize, E> Decodable<u8>
+    for Vec<T, N>
+    where T: Decodable<u8, DecoderError = E>,
+        T::Decoder: Decode<T, u8> + Default,
+        E: Default
 {
-    fn read(&mut self) -> Option<Vec<T, N>>
-    {
-        match self
-        {
-            Self::Done(_) => match take(self)
-            {
-                Self::Done(result) => Some(result),
-                _ => unreachable!(),
-            },
-            _ => None,
-        }
-    }
+    type DecoderError = E;
+
+    type Decoder = DecodeVec<T, N, E>;
 }
 
-impl<T: TryDecodable, const N: usize, E: Default> TryDecoderWriter<Vec<T, N>>
-    for DecoderVec<T, N, E>
-    where T::Decoder: TryDecoder<T, Error = E> + Default
+impl<T, const N: usize, E> Decode<Vec<T, N>, u8>
+    for DecodeVec<T, N, E>
+    where T: Decodable<u8, DecoderError = E>,
+        T::Decoder: Decode<T, u8> + Default,
+        E: Default
 {
     type Error = E;
 
-    fn try_write(&mut self, byte: u8) -> Result<Result<(), u8>, Self::Error>
+    fn write(&mut self, byte: u8) -> Result<Result<bool, u8>, E>
     {
         match self
         {
             Self::Ready =>
             {
                 *self = Self::ProgressLength(Default::default());
-                return self.try_write(byte);
+                self.write(byte)
             },
-            Self::ProgressLength(decoder) =>
+            Self::ProgressLength(decode) =>
             {
-                _ = decoder.write(byte);
-
-                match decoder.read()
+                match decode.write(byte)
                 {
-                    Some(value) =>
+                    Ok(Ok(true)) => match take(self)
                     {
-                        *self = Self::ProgressVec(
-                            Vec::new(),
-                            value,
-                            Default::default());
-                        return self.try_write(byte);
+                        Self::ProgressLength(decode) => match decode.unwrap()
+                        {
+                            0 =>
+                            {
+                                *self = Self::Done(Vec::new());
+                                Ok(Ok(true))
+                            },
+                            length =>
+                            {
+                                *self = Self::ProgressVec(
+                                    Vec::new(),
+                                    length,
+                                    Default::default());
+                                Ok(Ok(false))
+                            },
+                        },
+                        _ => unreachable!(),
                     },
-                    None => return Ok(Ok(())),
+                    Ok(Ok(false)) => Ok(Ok(false)),
+                    Ok(Err(_)) => panic!("Unexpected inner decoder state."),
                 }
             },
-            Self::ProgressVec(vec, length, decoder) =>
+            Self::ProgressVec(_, _, decode) =>
             {
-                _ = decoder.try_write(byte)?;
-
-                match decoder.read()
+                match decode.write(byte)
                 {
-                    Some(value) if vec.len() == *length => match vec.push(value)
+                    Ok(Ok(true)) => match take(self)
                     {
-                        Ok(_) => match take(self)
+                        Self::ProgressVec(mut vec, length, decode) =>
                         {
-                            Self::ProgressVec(vec, _, _) =>
+                            vec.push(decode.unwrap());
+                            if vec.len() == length
                             {
                                 *self = Self::Done(vec);
-                                return self.try_write(byte);
-                            },
-                            _ => unreachable!(),
-                        },
-                        Err(_) => Err(Default::default()),
-                    },
-                    Some(value) => match vec.push(value)
-                    {
-                        Ok(_) => match take(self)
-                        {
-                            Self::ProgressVec(vec, length, _) =>
+                                Ok(Ok(true))
+                            }
+                            else
                             {
                                 *self = Self::ProgressVec(
                                     vec,
                                     length,
                                     Default::default());
-                                return self.try_write(byte);
-                            },
-                            _ => unreachable!(),
+                                Ok(Ok(false))
+                            }
                         },
-                        Err(_) => Err(Default::default()),
+                        _ => unreachable!(),
                     },
-                    None => Ok(Ok(())),
+                    Ok(Ok(false)) => Ok(Ok(false)),
+                    Ok(Err(_)) => panic!("Unexpected inner decoder state."),
+                    Err(error) => Err(error),
                 }
             },
-            _ => Ok(Err(byte)),
+            Self::Done(_) => Ok(Err(byte)),
         }
     }
-}
 
-impl<T: TryDecodable, const N: usize, E: Default> TryDecoder<Vec<T, N>>
-    for DecoderVec<T, N, E>
-    where T::Decoder: TryDecoder<T, Error = E> + Default { }
+    fn is_done(&self) -> bool { matches!(self, Self::Done(_)) }
 
-impl<T: TryDecodable, const N: usize, E: Default> TryDecodable
-    for Vec<T, N>
-    where T::Decoder: TryDecoder<T, Error = E> + Default
-{
-    type Decoder = DecoderVec<T, N, E>;
+    fn unwrap(self) -> Vec<T, N>
+    {
+        match self
+        {
+            Self::Done(result) => result,
+            _ => panic!("Cannot unwrap unfinished decoder."),
+        }
+    }
 }
