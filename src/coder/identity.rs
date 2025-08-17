@@ -36,6 +36,14 @@ pub struct IdentityDecoder<Value>
     _marker: PhantomData<Value>,
 }
 
+impl<Value> IdentityDecoder<Value>
+{
+    pub fn new() -> Self
+    {
+        Self { _is_done: false, _marker: Default::default() }
+    }
+}
+
 impl<Value> Decoder for IdentityDecoder<Value>
 {
     type Value = Value;
@@ -58,8 +66,5 @@ impl<Value> Decoder for IdentityDecoder<Value>
 
 impl<Value> Default for IdentityDecoder<Value>
 {
-    fn default() -> Self
-    {
-        Self { _is_done: false, _marker: Default::default() }
-    }
+    fn default() -> Self { Self::new() }
 }

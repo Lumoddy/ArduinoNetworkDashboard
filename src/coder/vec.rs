@@ -15,6 +15,30 @@ pub struct LengthEncoder
     _state: _LengthEncoderState,
 }
 
+impl _LengthEncoderState
+{
+    fn _next_after_read_word(&self)
+        -> (Self, EncoderResultOf<LengthEncoder>)
+    {
+        match self
+        {
+            Self::Ready(length) =>
+            {
+                if *length < 0xFF
+                { (Self::Done, EncoderResult::Done(*length as u8)) }
+                else
+                { (Self::Long(length.to_le_bytes()), EncoderResult::Ok(0xFF)) }
+            },
+            Self::Long(bytes) =>
+            { (Self::SecondByte(bytes[1]), EncoderResult::Ok(bytes[0])) },
+            Self::SecondByte(byte) =>
+            { (Self::Done, EncoderResult::Done(*byte)) },
+            Self::Done =>
+            { (Self::Done, EncoderResult::Empty) },
+        }
+    }
+}
+
 impl Encoder for LengthEncoder
 {
     type Value = usize;
@@ -23,32 +47,9 @@ impl Encoder for LengthEncoder
 
     fn read_word(&mut self) -> EncoderResultOf<Self>
     {
-        match self._state
-        {
-            _LengthEncoderState::Ready(length) =>
-            {
-                if length < 0xFF
-                {
-                    self._state = _LengthEncoderState::Done;
-                    EncoderResult::Done(length as u8)
-                }
-                else
-                {
-                    self._state = _LengthEncoderState::Long(length.to_le_bytes());
-                    EncoderResult::Ok(0xFF)
-                }
-            },
-            _LengthEncoderState::Long(bytes) =>
-            {
-                self._state = _LengthEncoderState::SecondByte(bytes[1]);
-                EncoderResult::Ok(bytes[0])
-            },
-            _LengthEncoderState::SecondByte(byte) =>
-            {
-                EncoderResult::Done(byte)
-            },
-            _LengthEncoderState::Done => EncoderResult::Empty,
-        }
+        let (state, result) = self._state._next_after_read_word();
+        self._state = state;
+        result
     }
 }
 
@@ -73,53 +74,61 @@ pub struct LengthDecoder
     _state: _LengthDecoderState,
 }
 
+impl _LengthDecoderState
+{
+    fn _next_after_write_word(&self, word: u8)
+        -> (Self, DecoderResultOf<LengthDecoder>)
+    {
+        match self
+        {
+            Self::Ready =>
+            {
+                if word == 0xFF
+                { (Self::ReadyLong, DecoderResult::Ok) }
+                else
+                { (Self::Done, DecoderResult::Done(word as usize)) }
+            },
+            Self::ReadyLong =>
+            { (Self::FirstByte(word), DecoderResult::Ok) },
+            Self::FirstByte(byte) =>
+            {
+                let length = usize::from_le_bytes([*byte, word]);
+                (Self::Done, DecoderResult::Done(length))
+            },
+            Self::Done =>
+            { (Self::Done, DecoderResult::Full(word)) },
+        }
+    }
+}
+
+impl LengthDecoder
+{
+    pub fn new() -> Self
+    {
+        Self { _state: _LengthDecoderState::Ready }
+    }
+}
+
 impl Decoder for LengthDecoder
 {
     type Value = usize;
     type Word = u8;
     type Error = Infallible;
 
-    fn write_word(&mut self, word: u8) -> DecoderResultOf<Self>
+    fn write_word(&mut self, word: Self::Word) -> DecoderResultOf<Self>
     {
-        match self._state
-        {
-            _LengthDecoderState::Ready =>
-            {
-                if word == 0xFF
-                {
-                    self._state = _LengthDecoderState::ReadyLong;
-                    DecoderResult::Ok
-                }
-                else
-                {
-                    self._state = _LengthDecoderState::Done;
-                    DecoderResult::Done(word as usize)
-                }
-            },
-            _LengthDecoderState::ReadyLong =>
-            {
-                self._state = _LengthDecoderState::FirstByte(word);
-                DecoderResult::Ok
-            },
-            _LengthDecoderState::FirstByte(byte) =>
-            {
-                self._state = _LengthDecoderState::Done;
-                DecoderResult::Done(usize::from_le_bytes([byte, word]))
-            },
-            _LengthDecoderState::Done => DecoderResult::Full(word),
-        }
+        let (state, result) = self._state._next_after_write_word(word);
+        self._state = state;
+        result
     }
 }
 
 impl Default for LengthDecoder
 {
-    fn default() -> Self
-    {
-        Self { _state: _LengthDecoderState::Ready }
-    }
+    fn default() -> Self { Self::new() }
 }
 
-mod heapless
+pub mod heapless
 {
     use super::*;
 
@@ -177,7 +186,7 @@ mod heapless
         fn from(value: Vec<T::Value, N>) -> Self
         {
             if value.len() == 0
-            { panic!("Cannot encode empty array.") }
+            { panic!("Cannot encode empty vec.") }
 
             Self { _current_encoder: None, _elements_left: value }
         }
@@ -212,8 +221,8 @@ mod heapless
                         {
                             match vec.push(value)
                             {
-                                Ok(_) => (),
                                 Err(_) => unreachable!(),
+                                Ok(_) => (),
                             }
 
                             if vec.len() == self._target_len
@@ -245,6 +254,9 @@ mod heapless
     {
         pub fn of_length(length: usize) -> Self
         {
+            if length > N
+            { panic!("Cannot decode vec longer than max capacity.") }
+
             Self
             {
                 _elements_so_far: Some(Vec::new()),
@@ -289,14 +301,10 @@ mod heapless
                         EncoderResult::Done(word) =>
                         {
                             if self._elements_left.len() == 0
-                            {
-                                EncoderResult::Done(word)
-                            }
-                            else
-                            {
-                                self._elements_left = Vec::new();
-                                self.read_word()
-                            }
+                            { return EncoderResult::Done(word) }
+
+                            self._elements_left = Vec::new();
+                            self.read_word()
                         },
                         EncoderResult::Empty => panic!(
                             "Inner encoder returned empty before returning \
@@ -366,6 +374,15 @@ mod heapless
         _state: _VecDecoderState<T, N>,
     }
 
+    impl<T, const N: usize, Error> VecDecoder<T, N>
+    where T: Decoder<Word = u8, Error = Error> + Default
+    {
+        pub fn new() -> Self
+        {
+            Self { _state: _VecDecoderState::Length(Default::default()) }
+        }
+    }
+
     pub enum VecDecoderError<InnerError>
     {
         LengthLongerThanCapacity,
@@ -388,14 +405,25 @@ mod heapless
                     match decoder.write_word(word)
                     {
                         DecoderResult::Ok => DecoderResult::Ok,
-                        DecoderResult::Done(value) =>
+                        DecoderResult::Done(length) =>
                         {
+                            if length > N
+                            {
+                                return DecoderResult::Err(
+                                    VecDecoderError::LengthLongerThanCapacity,
+                                    word);
+                            }
+
                             self._state = _VecDecoderState::Vec
                             {
                                 elements_so_far: Some(Vec::new()),
                                 current_decoder: Default::default(),
-                                target_len: value,
+                                target_len: length,
                             };
+
+                            if length == 0
+                            { return DecoderResult::Done(Vec::new()) }
+
                             DecoderResult::Ok
                         },
                         DecoderResult::Full(_) => panic!(
@@ -438,7 +466,7 @@ mod heapless
                             },
                             DecoderResult::Full(_) => panic!(
                                 "Inner encoder returned full before returning \
-                                done."),
+                                 done."),
                             DecoderResult::Err(error, word) =>
                             {
                                 DecoderResult::Err(
@@ -455,9 +483,6 @@ mod heapless
     impl<T, const N: usize, Error> Default for VecDecoder<T, N>
     where T: Decoder<Word = u8, Error = Error> + Default
     {
-        fn default() -> Self
-        {
-            Self { _state: _VecDecoderState::Length(Default::default()) }
-        }
+        fn default() -> Self { Self::new() }
     }
 }
