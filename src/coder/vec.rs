@@ -1,3 +1,5 @@
+use core::mem::replace;
+
 use super::*;
 use ::heapless::*;
 
@@ -5,38 +7,14 @@ use ::heapless::*;
 enum _LengthEncoderState
 {
     Ready(usize),
-    Long([u8; 2]),
-    SecondByte(u8),
+    Long((u8, u8)),
+    SecondByte(((), u8)),
     Done,
 }
 
 pub struct LengthEncoder
 {
     _state: _LengthEncoderState,
-}
-
-impl _LengthEncoderState
-{
-    fn _next_after_read_word(&self)
-        -> (Self, EncoderResultOf<LengthEncoder>)
-    {
-        match self
-        {
-            Self::Ready(length) =>
-            {
-                if *length < 0xFF
-                { (Self::Done, EncoderResult::Done(*length as u8)) }
-                else
-                { (Self::Long(length.to_le_bytes()), EncoderResult::Ok(0xFF)) }
-            },
-            Self::Long(bytes) =>
-            { (Self::SecondByte(bytes[1]), EncoderResult::Ok(bytes[0])) },
-            Self::SecondByte(byte) =>
-            { (Self::Done, EncoderResult::Done(*byte)) },
-            Self::Done =>
-            { (Self::Done, EncoderResult::Empty) },
-        }
-    }
 }
 
 impl Encoder for LengthEncoder
@@ -47,9 +25,37 @@ impl Encoder for LengthEncoder
 
     fn read_word(&mut self) -> EncoderResultOf<Self>
     {
-        let (state, result) = self._state._next_after_read_word();
-        self._state = state;
-        result
+        match replace(&mut self._state, _LengthEncoderState::Done)
+        {
+            _LengthEncoderState::Ready(length) =>
+            {
+                if length < 0xFF
+                {
+                    self._state = _LengthEncoderState::Done;
+                    EncoderResult::Done(length as u8)
+                }
+                else
+                {
+                    self._state = _LengthEncoderState::Long(
+                    {
+                        let bytes = length.to_le_bytes();
+                        (bytes[0], bytes[1])
+                    });
+                    EncoderResult::Ok(0xFF)
+                }
+            },
+            _LengthEncoderState::Long(bytes) =>
+            {
+                self._state = _LengthEncoderState::SecondByte(((), bytes.1));
+                EncoderResult::Ok(bytes.0)
+            },
+            _LengthEncoderState::SecondByte(bytes) =>
+            {
+                self._state = _LengthEncoderState::Done;
+                EncoderResult::Ok(bytes.1)
+            },
+            _LengthEncoderState::Done => EncoderResult::Empty,
+        }
     }
 }
 
@@ -65,40 +71,13 @@ enum _LengthDecoderState
 {
     Ready,
     ReadyLong,
-    FirstByte(u8),
+    FirstByte((u8, ())),
     Done,
 }
 
 pub struct LengthDecoder
 {
     _state: _LengthDecoderState,
-}
-
-impl _LengthDecoderState
-{
-    fn _next_after_write_word(&self, word: u8)
-        -> (Self, DecoderResultOf<LengthDecoder>)
-    {
-        match self
-        {
-            Self::Ready =>
-            {
-                if word == 0xFF
-                { (Self::ReadyLong, DecoderResult::Ok) }
-                else
-                { (Self::Done, DecoderResult::Done(word as usize)) }
-            },
-            Self::ReadyLong =>
-            { (Self::FirstByte(word), DecoderResult::Ok) },
-            Self::FirstByte(byte) =>
-            {
-                let length = usize::from_le_bytes([*byte, word]);
-                (Self::Done, DecoderResult::Done(length))
-            },
-            Self::Done =>
-            { (Self::Done, DecoderResult::Full(word)) },
-        }
-    }
 }
 
 impl LengthDecoder
@@ -115,11 +94,35 @@ impl Decoder for LengthDecoder
     type Word = u8;
     type Error = Infallible;
 
-    fn write_word(&mut self, word: Self::Word) -> DecoderResultOf<Self>
+    fn write_word(&mut self, word: u8) -> DecoderResultOf<Self>
     {
-        let (state, result) = self._state._next_after_write_word(word);
-        self._state = state;
-        result
+        match replace(&mut self._state, _LengthDecoderState::Done)
+        {
+            _LengthDecoderState::Ready =>
+            {
+                if word == 0xFF
+                {
+                    self._state = _LengthDecoderState::ReadyLong;
+                    DecoderResult::Ok
+                }
+                else
+                {
+                    self._state = _LengthDecoderState::Done;
+                    DecoderResult::Done(word as usize)
+                }
+            },
+            _LengthDecoderState::ReadyLong =>
+            {
+                self._state = _LengthDecoderState::FirstByte((word, ()));
+                DecoderResult::Ok
+            },
+            _LengthDecoderState::FirstByte(bytes) =>
+            {
+                self._state = _LengthDecoderState::Done;
+                DecoderResult::Done(usize::from_le_bytes([bytes.0, word]))
+            },
+            _LengthDecoderState::Done => DecoderResult::Full(word),
+        }
     }
 }
 
