@@ -12,7 +12,6 @@ bench = false
 
 [dependencies]
 heapless = "0.8"
-panic-halt = "1.0.0"
 ufmt = "0.2.0"
 nb = "1.1.0"
 embedded-hal = "1.0"
@@ -21,6 +20,9 @@ embedded-hal = "1.0"
 git = "https://github.com/rahix/avr-hal"
 rev = "fafaf587a32a4500239fd073f89d1b9c36b48092"
 features = ["arduino-uno"]
+
+[dependencies.avr-device]
+version = "0.7.0"
 
 # Configure the build for minimal size - AVRs have very little program memory
 [profile.dev]

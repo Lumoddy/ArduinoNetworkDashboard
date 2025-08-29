@@ -1,6 +1,27 @@
 {
     "cSpell.words": [
+        "atmega",
+        "COMPA",
+        "eicra",
+        "EXINT",
         "heapless",
-        "Lengthless"
+        "icie",
+        "Lengthless",
+        "ocie",
+        "pcicr",
+        "pcint",
+        "pcmsk",
+        "TCCR",
+        "TCNT",
+        "tifr",
+        "timsk",
+        "toie",
+        "ufmt",
+        "USART",
+        "uwrite",
+        "uwriteln",
+        "wdph",
+        "wdpl",
+        "wdtcsr"
     ]
 }
