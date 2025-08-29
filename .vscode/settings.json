@@ -1,9 +1,11 @@
 {
     "cSpell.words": [
         "atmega",
+        "borf",
         "COMPA",
         "eicra",
         "EXINT",
+        "extrf",
         "heapless",
         "icie",
         "Lengthless",
@@ -11,17 +13,20 @@
         "pcicr",
         "pcint",
         "pcmsk",
+        "porf",
         "TCCR",
         "TCNT",
         "tifr",
         "timsk",
         "toie",
         "ufmt",
+        "Uninit",
         "USART",
         "uwrite",
         "uwriteln",
         "wdph",
         "wdpl",
+        "wdrf",
         "wdtcsr"
     ]
 }

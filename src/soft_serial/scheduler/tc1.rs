@@ -1,6 +1,9 @@
 use arduino_hal::{clock::Clock, pac::{tc1::tccr1b::CS1_A, TC1}, simple_pwm::Prescaler, DefaultClock};
 use avr_device::interrupt::{self, CriticalSection};
 use core::{cmp::Ordering, num::NonZero};
+use crate::{panic_payload, soft_serial::scheduler};
+
+pub const PRESCALER: Prescaler = Prescaler::Prescale8;
 
 pub struct SchedulerTaskContext<'cs>
 {
@@ -33,11 +36,11 @@ pub trait SchedulerAllocationOps
         &mut self,
         priority: u8,
         cycles_after_init: u64,
-        task: fn(SchedulerTaskContext))
-        -> Result<(), fn(SchedulerTaskContext)>;
+        task: unsafe fn(SchedulerTaskContext))
+        -> Result<(), unsafe fn(SchedulerTaskContext)>;
 
     fn next(&mut self, current_time: u64)
-        -> Option<fn(SchedulerTaskContext)>;
+        -> Option<unsafe fn(SchedulerTaskContext)>;
 
     fn next_task_time(&self) -> Option<u64>;
 }
@@ -49,8 +52,8 @@ impl<const TASK_CAPACITY: usize>
         &mut self,
         priority: u8,
         cycles_after_init: u64,
-        task: fn(SchedulerTaskContext))
-        -> Result<(), fn(SchedulerTaskContext)>
+        task: unsafe fn(SchedulerTaskContext))
+        -> Result<(), unsafe fn(SchedulerTaskContext)>
     {
         match self._tasks.push(_TaskEntry { priority, cycles_after_init, task })
         {
@@ -59,7 +62,7 @@ impl<const TASK_CAPACITY: usize>
         }
     }
 
-    fn next(&mut self, current_time: u64) -> Option<fn(SchedulerTaskContext)>
+    fn next(&mut self, current_time: u64) -> Option<unsafe fn(SchedulerTaskContext)>
     {
         let Some(time) = self.next_task_time() else { return None };
 
@@ -83,7 +86,7 @@ struct _TaskEntry
 {
     pub priority: u8,
     pub cycles_after_init: u64,
-    pub task: fn(SchedulerTaskContext),
+    pub task: unsafe fn(SchedulerTaskContext),
 }
 
 impl PartialEq for _TaskEntry
@@ -144,7 +147,7 @@ impl Scheduler
                         .wgm1().bits(0b__00));
                     tc.tccr1b.write(|w| w
                         .wgm1().bits(0b01__)
-                        .cs1().variant(match _PRESCALER
+                        .cs1().variant(match PRESCALER
                         {
                             Prescaler::Direct => CS1_A::DIRECT,
                             Prescaler::Prescale8 => CS1_A::PRESCALE_8,
@@ -178,16 +181,16 @@ impl Scheduler
         &self,
         priority: u8,
         millisecond_delay: u64,
-        task: fn(SchedulerTaskContext))
-        -> Result<(), fn(SchedulerTaskContext)>
+        task: unsafe fn(SchedulerTaskContext))
+        -> Result<(), unsafe fn(SchedulerTaskContext)>
     {
         interrupt::free(|_| unsafe
         {
             let Some(scheduler) = &mut _SCHEDULER
             else
             {
-                unreachable!(
-                    "TC1 Scheduler was initiated in an illegal way.");
+                panic_payload!(
+                    str: b"TC1 Scheduler was initiated in an illegal way.");
             };
 
             self.schedule_task_absolute(
@@ -196,7 +199,7 @@ impl Scheduler
                     + scheduler._tc.tcnt1.read().bits() as u64
                     + ((DefaultClock::FREQ as u64
                         * millisecond_delay)
-                        / (1000 * match _PRESCALER
+                        / (1000 * match PRESCALER
                         {
                             Prescaler::Direct => 1,
                             Prescaler::Prescale8 => 8,
@@ -212,16 +215,16 @@ impl Scheduler
         &self,
         priority: u8,
         cycles_after_init: u64,
-        task: fn(SchedulerTaskContext))
-        -> Result<(), fn(SchedulerTaskContext)>
+        task: unsafe fn(SchedulerTaskContext))
+        -> Result<(), unsafe fn(SchedulerTaskContext)>
     {
         interrupt::free(|_| unsafe
         {
             let Some(scheduler) = &mut _SCHEDULER
             else
             {
-                unreachable!(
-                    "TC1 Scheduler was initiated in an illegal way.");
+                panic_payload!(
+                    str: b"TC1 Scheduler was initiated in an illegal way.");
             };
 
             scheduler._allocation.schedule_task_absolute(
@@ -269,6 +272,21 @@ impl Scheduler
             Ok(())
         })
     }
+
+    pub unsafe fn internal_counter(&self) -> u64
+    {
+        interrupt::free(|_| unsafe
+        {
+            let Some(scheduler) = &mut _SCHEDULER
+            else
+            {
+                panic_payload!(
+                    str: b"TC1 Scheduler was initiated in an illegal way.");
+            };
+
+            scheduler._cycle_counter + scheduler._tc.tcnt1.read().bits() as u64
+        })
+    }
 }
 
 struct _SchedulerState
@@ -278,7 +296,6 @@ struct _SchedulerState
     _allocation: &'static mut dyn SchedulerAllocationOps,
 }
 
-const _PRESCALER: Prescaler = Prescaler::Prescale8;
 static mut _SCHEDULER: Option<_SchedulerState> = None;
 
 #[avr_device::interrupt(atmega328p)]

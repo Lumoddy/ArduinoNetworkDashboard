@@ -28,6 +28,7 @@ static mut TC1_SCHEDULER_ALLOCATION: SchedulerAllocation<16>
     = SchedulerAllocation::new();
 
 static mut PRINT: Vec<u8, 256> = Vec::new();
+static mut PRINT_NUMBER: Option<u64> = None;
 
 #[arduino_hal::entry]
 fn main() -> !
@@ -41,55 +42,100 @@ fn main() -> !
         pins.d1.into_output(),
         arduino_hal::hal::usart::BaudrateArduinoExt::into_baudrate(9600));
 
-    for byte in b"Initializing Tests...\n"
+    dp.CPU.mcusr.modify(|r, w|
     {
-        serial.write_byte(*byte);
-    }
+        if r.borf().bit_is_set()
+        {
+            for byte in b"!Reset caused by brown out.\n"
+            { serial.write_byte(*byte) }
+
+            w.borf().clear_bit();
+        }
+        else if r.extrf().bit_is_set()
+        {
+            for byte in b"!Reset caused by a manual reset.\n"
+            { serial.write_byte(*byte) }
+
+            w.extrf().clear_bit();
+        }
+        else if r.porf().bit_is_set()
+        {
+            for byte in b"!Start caused by power on.\n"
+            { serial.write_byte(*byte) }
+
+            w.porf().clear_bit();
+        }
+        else if r.wdrf().bit_is_set()
+        {
+            for byte in b"!Reset caused by watchdog.\n"
+            { serial.write_byte(*byte) }
+
+            w.wdrf().clear_bit();
+        }
+        else
+        {
+            for byte in b"!Started for the first time.\n"
+            { serial.write_byte(*byte) }
+        }
+
+        w
+    });
+
+    for byte in b"!Initializing Tests...\n"
+    { serial.write_byte(*byte) }
 
     let Ok(scheduler) = tc1::Scheduler::init(
         dp.TC1,
         unsafe { &mut TC1_SCHEDULER_ALLOCATION }) else { unreachable!() };
 
-    for byte in b"Starting Tests...\n"
+    for byte in b"!Starting Tests...\n"
+    { serial.write_byte(*byte) }
+
+    unsafe fn append_a(context: SchedulerTaskContext)
     {
-        serial.write_byte(*byte);
+        unwrap_payload!(PRINT.push(b'|'));
+
+        unwrap_payload!(context.scheduler.schedule_task_absolute(
+            0,
+            context.cycles_since_init + 10000,
+            append_a));
     }
 
-    fn append_a(context: SchedulerTaskContext)
+    unsafe fn append_b(context: SchedulerTaskContext)
     {
-        interrupt::free(|_| unsafe
-        {
-            unwrap_payload!(PRINT.push(b'|'));
+        unwrap_payload!(PRINT.push(b'-'));
 
-            unwrap_payload!(context.scheduler.schedule_task_absolute(
-                0,
-                context.cycles_since_init + 100000,
-                append_a));
-        });
+        unwrap_payload!(context.scheduler.schedule_task_absolute(
+            0,
+            context.cycles_since_init + 2000,
+            append_b));
     }
 
-    fn append_b(context: SchedulerTaskContext)
+    unsafe fn append_c(context: SchedulerTaskContext)
     {
-        interrupt::free(|_| unsafe
-        {
-            unwrap_payload!(PRINT.push(b'-'));
+        unwrap_payload!(PRINT.push(b'('));
+        unwrap_payload!(PRINT.push(b')'));
 
-            unwrap_payload!(context.scheduler.schedule_task_absolute(
-                0,
-                context.cycles_since_init + 20000,
-                append_b));
-        });
+        unwrap_payload!(context.scheduler.schedule_task_absolute(
+            0,
+            context.cycles_since_init + 1000000,
+            append_c));
     }
 
-    unwrap_payload!(scheduler.schedule_task_absolute(
-        0,
-        100000,
-        append_a));
+    unsafe fn append_d(context: SchedulerTaskContext)
+    {
+        PRINT_NUMBER = Some(context.cycles_since_init);
 
-    unwrap_payload!(scheduler.schedule_task_absolute(
-        0,
-        100000,
-        append_b));
+        unwrap_payload!(context.scheduler.schedule_task_absolute(
+            0,
+            context.cycles_since_init + 10000000,
+            append_d));
+    }
+
+    unwrap_payload!(scheduler.schedule_task_absolute(0, 10000, append_a));
+    unwrap_payload!(scheduler.schedule_task_absolute(0, 10000, append_b));
+    unwrap_payload!(scheduler.schedule_task_absolute(0, 100000, append_c));
+    unwrap_payload!(scheduler.schedule_task_absolute(0, 1000000, append_d));
 
     // dp.TC1.tcnt1.write(|w| w.bits(0));
     // dp.TC1.tccr1a.write(|w| w
@@ -115,14 +161,40 @@ fn main() -> !
             let message = mem::replace(&mut PRINT, Vec::new());
 
             for byte in message
-            {
-                serial.write_byte(byte);
-            }
+            { serial.write_byte(byte) }
 
             serial.write_byte(b'\n');
         });
 
-        delay_ms(1000);
+        interrupt::free(|_| unsafe
+        {
+            if let Some(mut value) = mem::replace(&mut PRINT_NUMBER, None)
+            {
+                for byte in b"\n[ "
+                { serial.write_byte(*byte) }
+
+                let mut buffer = heapless::Vec::<u8, 16>::new();
+
+                loop
+                {
+                    let digit = value % 10 as u64;
+                    value /= 10 as u64;
+
+                    buffer.push(b'0' + digit as u8);
+
+                    if value == 0 { break };
+                }
+
+                buffer.reverse();
+                for byte in buffer
+                { serial.write_byte(byte) }
+
+                for byte in b" ]\n"
+                { serial.write_byte(*byte) }
+            }
+        });
+
+        delay_ms(80);
 
         avr_device::asm::wdr();
     }
