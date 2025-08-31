@@ -28,5 +28,6 @@
         "wdpl",
         "wdrf",
         "wdtcsr"
-    ]
+    ],
+    "rust-analyzer.imports.preferNoStd": true
 }

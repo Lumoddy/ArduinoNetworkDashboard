@@ -1,7 +1,7 @@
 use arduino_hal::{clock::Clock, pac::{tc1::tccr1b::CS1_A, TC1}, simple_pwm::Prescaler, DefaultClock};
 use avr_device::interrupt::{self, CriticalSection};
-use core::{cmp::Ordering, num::NonZero};
-use crate::{panic_payload, soft_serial::scheduler};
+use core::cmp::Ordering;
+use crate::panic_payload;
 
 pub const PRESCALER: Prescaler = Prescaler::Prescale8;
 
@@ -20,24 +20,28 @@ pub struct SchedulerAllocation<const TASK_CAPACITY: usize>
         TASK_CAPACITY>,
 }
 
-impl<const TASK_CAPACITY: usize> SchedulerAllocation<TASK_CAPACITY>
+impl<const TASK_CAPACITY: usize>
+    SchedulerAllocation<TASK_CAPACITY>
 {
     pub const fn new() -> Self { Self { _tasks: heapless::BinaryHeap::new() } }
 }
 
-impl<const TASK_CAPACITY: usize> Default for SchedulerAllocation<TASK_CAPACITY>
+impl<const TASK_CAPACITY: usize>
+    Default for SchedulerAllocation<TASK_CAPACITY>
 {
     fn default() -> Self { Self::new() }
 }
 
 pub trait SchedulerAllocationOps
 {
+    fn can_schedule_task(&self) -> bool;
+
     fn schedule_task_absolute(
         &mut self,
         priority: u8,
         cycles_after_init: u64,
-        task: unsafe fn(SchedulerTaskContext))
-        -> Result<(), unsafe fn(SchedulerTaskContext)>;
+        task: fn(SchedulerTaskContext))
+        -> Result<(), fn(SchedulerTaskContext)>;
 
     fn next(&mut self, current_time: u64)
         -> Option<unsafe fn(SchedulerTaskContext)>;
@@ -48,12 +52,17 @@ pub trait SchedulerAllocationOps
 impl<const TASK_CAPACITY: usize>
     SchedulerAllocationOps for SchedulerAllocation<TASK_CAPACITY>
 {
+    fn can_schedule_task(&self) -> bool
+    {
+        self._tasks.len() != self._tasks.capacity()
+    }
+
     fn schedule_task_absolute(
         &mut self,
         priority: u8,
         cycles_after_init: u64,
-        task: unsafe fn(SchedulerTaskContext))
-        -> Result<(), unsafe fn(SchedulerTaskContext)>
+        task: fn(SchedulerTaskContext))
+        -> Result<(), fn(SchedulerTaskContext)>
     {
         match self._tasks.push(_TaskEntry { priority, cycles_after_init, task })
         {
@@ -86,7 +95,7 @@ struct _TaskEntry
 {
     pub priority: u8,
     pub cycles_after_init: u64,
-    pub task: unsafe fn(SchedulerTaskContext),
+    pub task: fn(SchedulerTaskContext),
 }
 
 impl PartialEq for _TaskEntry
@@ -177,12 +186,60 @@ impl Scheduler
         }
     }
 
+    pub unsafe fn steal() -> Result<Scheduler, ()>
+    {
+        unsafe
+        {
+            match _SCHEDULER
+            {
+                None => Err(()),
+                Some(_) => Ok(Scheduler { _private: () }),
+            }
+        }
+    }
+
+    pub fn can_schedule_task(&self) -> bool
+    {
+        interrupt::free(|_| unsafe
+        {
+            let Some(scheduler) = &mut _SCHEDULER
+            else
+            {
+                panic_payload!(
+                    str: b"TC1 Scheduler was initiated in an illegal way.");
+            };
+
+            scheduler._allocation.can_schedule_task()
+        })
+    }
+
     pub fn schedule_task_millis(
         &self,
         priority: u8,
         millisecond_delay: u64,
-        task: unsafe fn(SchedulerTaskContext))
-        -> Result<(), unsafe fn(SchedulerTaskContext)>
+        task: fn(SchedulerTaskContext))
+        -> Result<(), fn(SchedulerTaskContext)>
+    {
+        self.schedule_task_cycles(
+            priority,
+            (DefaultClock::FREQ as u64 * millisecond_delay)
+                / (1000 * match PRESCALER
+                {
+                    Prescaler::Direct => 1,
+                    Prescaler::Prescale8 => 8,
+                    Prescaler::Prescale64 => 64,
+                    Prescaler::Prescale256 => 256,
+                    Prescaler::Prescale1024 => 1024,
+                }),
+            task)
+    }
+
+    pub fn schedule_task_cycles(
+        &self,
+        priority: u8,
+        cycle_delay: u64,
+        task: fn(SchedulerTaskContext))
+        -> Result<(), fn(SchedulerTaskContext)>
     {
         interrupt::free(|_| unsafe
         {
@@ -197,16 +254,7 @@ impl Scheduler
                 priority,
                 scheduler._cycle_counter
                     + scheduler._tc.tcnt1.read().bits() as u64
-                    + ((DefaultClock::FREQ as u64
-                        * millisecond_delay)
-                        / (1000 * match PRESCALER
-                        {
-                            Prescaler::Direct => 1,
-                            Prescaler::Prescale8 => 8,
-                            Prescaler::Prescale64 => 64,
-                            Prescaler::Prescale256 => 256,
-                            Prescaler::Prescale1024 => 1024,
-                        })),
+                    + cycle_delay,
                 task)
         })
     }
@@ -215,8 +263,8 @@ impl Scheduler
         &self,
         priority: u8,
         cycles_after_init: u64,
-        task: unsafe fn(SchedulerTaskContext))
-        -> Result<(), unsafe fn(SchedulerTaskContext)>
+        task: fn(SchedulerTaskContext))
+        -> Result<(), fn(SchedulerTaskContext)>
     {
         interrupt::free(|_| unsafe
         {

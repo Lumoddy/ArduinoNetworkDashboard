@@ -18,6 +18,8 @@ use core::{convert::Infallible, mem};
 use arduino_hal::{delay_ms, prelude::_unwrap_infallible_UnwrapInfallible};
 use avr_device::interrupt;
 use heapless::Vec;
+use soft_serial::writer::SoftSerialWriterConfig;
+use soft_serial::{reader, writer};
 
 use crate::soft_serial::tc1::{self, SchedulerAllocation, SchedulerTaskContext};
 
@@ -91,45 +93,67 @@ fn main() -> !
     for byte in b"!Starting Tests...\n"
     { serial.write_byte(*byte) }
 
-    unsafe fn append_a(context: SchedulerTaskContext)
-    {
-        unwrap_payload!(PRINT.push(b'|'));
+    let a = soft_serial::writer::init(
+        pins.d2.into_output(),
+        SoftSerialWriterConfig
+        {
+            baudrate: todo!(),
+            scheduler,
+            buffer: todo!(),
+            inverse_voltage: todo!(),
+        });
 
-        unwrap_payload!(context.scheduler.schedule_task_absolute(
-            0,
-            context.cycles_since_init + 10000,
-            append_a));
+    fn append_a(context: SchedulerTaskContext)
+    {
+        unsafe
+        {
+            unwrap_payload!(PRINT.push(b'|'));
+
+            unwrap_payload!(context.scheduler.schedule_task_absolute(
+                0,
+                context.cycles_since_init + 10000,
+                append_a));
+        }
     }
 
-    unsafe fn append_b(context: SchedulerTaskContext)
+    fn append_b(context: SchedulerTaskContext)
     {
-        unwrap_payload!(PRINT.push(b'-'));
+        unsafe
+        {
+            unwrap_payload!(PRINT.push(b'-'));
 
-        unwrap_payload!(context.scheduler.schedule_task_absolute(
-            0,
-            context.cycles_since_init + 2000,
-            append_b));
+            unwrap_payload!(context.scheduler.schedule_task_absolute(
+                0,
+                context.cycles_since_init + 2000,
+                append_b));
+        }
     }
 
-    unsafe fn append_c(context: SchedulerTaskContext)
+    fn append_c(context: SchedulerTaskContext)
     {
-        unwrap_payload!(PRINT.push(b'('));
-        unwrap_payload!(PRINT.push(b')'));
+        unsafe
+        {
+            unwrap_payload!(PRINT.push(b'('));
+            unwrap_payload!(PRINT.push(b')'));
 
-        unwrap_payload!(context.scheduler.schedule_task_absolute(
-            0,
-            context.cycles_since_init + 1000000,
-            append_c));
+            unwrap_payload!(context.scheduler.schedule_task_absolute(
+                0,
+                context.cycles_since_init + 1000000,
+                append_c));
+        }
     }
 
-    unsafe fn append_d(context: SchedulerTaskContext)
+    fn append_d(context: SchedulerTaskContext)
     {
-        PRINT_NUMBER = Some(context.cycles_since_init);
+        unsafe
+        {
+            PRINT_NUMBER = Some(context.cycles_since_init);
 
-        unwrap_payload!(context.scheduler.schedule_task_absolute(
-            0,
-            context.cycles_since_init + 10000000,
-            append_d));
+            unwrap_payload!(context.scheduler.schedule_task_absolute(
+                0,
+                context.cycles_since_init + 10000000,
+                append_d));
+        }
     }
 
     unwrap_payload!(scheduler.schedule_task_absolute(0, 10000, append_a));
