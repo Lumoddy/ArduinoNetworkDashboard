@@ -1,6 +1,8 @@
 use arduino_hal::{delay_ms, pac::wdt::wdtcsr};
 use avr_device::interrupt;
 
+use crate::format;
+
 #[macro_export]
 macro_rules! panic_payload
 {
@@ -63,53 +65,104 @@ macro_rules! expect_payload
 }
 
 #[macro_export]
+macro_rules! unreachable_payload
+{
+    () =>
+    {
+        $crate::panic_payload!(
+            str: b"Encountered unreachable at ",
+            str: file!().as_bytes(),
+            str: b"(",
+            b10 as i32: line!(),
+            str: b":",
+            b10 as i32: column!(),
+            str: b")")
+    };
+    ($($type:ident$( as $generic:ident)?: $value:expr),*) =>
+    {
+        $crate::panic_payload!(
+            b"Encountered unreachable: ",
+            $($type$( as $generic)?: $value),*);
+    };
+}
+
+#[macro_export]
 macro_rules! panic_setup_payload
 {
     () => { { } };
-    (bCustom as u8: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as u8: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_u8_to_payload($value as u8, &[$($letters),*])
+        _ = $crate::panic_handler::push_u8_to_payload(
+            $value as u8,
+            &[$($letters),*])
     };
-    (bCustom as i8: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as i8: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_i8_to_payload($value as i8, &[$($letters),*])
+        _ = $crate::panic_handler::push_i8_to_payload(
+            $value as i8,
+            &[$($letters),*],
+            $negative)
     };
-    (bCustom as u16: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as u16: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_u16_to_payload($value as u16, &[$($letters),*])
+        _ = $crate::panic_handler::push_u16_to_payload(
+            $value as u16,
+            &[$($letters),*])
     };
-    (bCustom as i16: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as i16: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_i16_to_payload($value as i16, &[$($letters),*])
+        _ = $crate::panic_handler::push_i16_to_payload(
+            $value as i16,
+            &[$($letters),*],
+            $negative)
     };
-    (bCustom as u32: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as u32: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_u32_to_payload($value as u32, &[$($letters),*])
+        _ = $crate::panic_handler::push_u32_to_payload(
+            $value as u32,
+            &[$($letters),*])
     };
-    (bCustom as i32: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as i32: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_i32_to_payload($value as i32, &[$($letters),*])
+        _ = $crate::panic_handler::push_i32_to_payload(
+            $value as i32,
+            &[$($letters),*],
+            $negative)
     };
-    (bCustom as u64: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as u64: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_u64_to_payload($value as u64, &[$($letters),*])
+        _ = $crate::panic_handler::push_u64_to_payload(
+            $value as u64,
+            &[$($letters),*])
     };
-    (bCustom as i64: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as i64: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_i64_to_payload($value as i64, &[$($letters),*])
+        _ = $crate::panic_handler::push_i64_to_payload(
+            $value as i64,
+            &[$($letters),*],
+            $negative)
     };
-    (bCustom as usize: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as usize: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_usize_to_payload($value as usize, &[$($letters),*])
+        _ = $crate::panic_handler::push_usize_to_payload(
+            $value as usize,
+            &[$($letters),*])
     };
-    (bCustom as isize: ($value:expr, [$($letters:expr),*])) =>
+    (bCustom as isize: ($value:expr, [$($letters:expr),*], $negative:expr$(,)?)) =>
     {
-        _ = $crate::panic_handler::push_isize_to_payload($value as isize, &[$($letters),*])
+        _ = $crate::panic_handler::push_isize_to_payload(
+            $value as isize,
+            &[$($letters),*],
+            $negative)
     };
     (b10 as $generic:ident: $value:expr) =>
     {
         $crate::panic_setup_payload!(bCustom as $generic:
-            ($value, [b"0", b"1", b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9"]));
+            (
+                $value,
+                [b"0", b"1", b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9"],
+                b"-",
+            ));
     };
     (bool: $value:expr) =>
     {
@@ -127,63 +180,47 @@ static mut _PAYLOAD: heapless::Vec<&'static [u8], 32> = heapless::Vec::new();
 
 macro_rules! push_x_to_payload_impl
 {
-    ($vis:vis unsafe fn $name:ident(value: $type:ty, signed: false)$(;)?) =>
+    ($vis:vis unsafe fn $name:ident $num:ty as signed $base:ident;) =>
     {
-        $vis unsafe fn $name(value: $type, alphabet: &[&'static [u8]])
+        $vis unsafe fn $name(
+            value: $num,
+            alphabet: &[&'static [u8]],
+            negative: &'static [u8])
         {
-            let mut value = value;
-            let insert_index = _PAYLOAD.len();
-
-            loop
-            {
-                let digit = value % alphabet.len() as $type;
-                value /= alphabet.len() as $type;
-
-                _ = _PAYLOAD.insert(insert_index, alphabet[digit as usize]);
-
-                if value == 0 { break };
-            }
+            $crate::format::$base(
+                value,
+                alphabet,
+                negative,
+                |char| unsafe { push_str_to_payload(char) });
         }
     };
-    ($vis:vis unsafe fn $name:ident(value: $type:ty, signed: true)$(;)?) =>
+    ($vis:vis unsafe fn $name:ident $num:ty as unsigned $base:ident;) =>
     {
-        $vis unsafe fn $name(value: $type, alphabet: &[&'static [u8]])
+        $vis unsafe fn $name(
+            value: $num,
+            alphabet: &[&'static [u8]])
         {
-            let mut value = value;
-            let insert_index = _PAYLOAD.len();
-
-            if value < 0
-            {
-                _ = _PAYLOAD.push(b"-");
-                value = -value;
-            }
-
-            loop
-            {
-                let digit = value % alphabet.len() as $type;
-                value /= alphabet.len() as $type;
-
-                _ = _PAYLOAD.insert(insert_index, alphabet[digit as usize]);
-
-                if value == 0 { break };
-            }
+            $crate::format::$base(
+                value,
+                alphabet,
+                |char| unsafe { push_str_to_payload(char) });
         }
     };
     (
-        $first_vis:vis unsafe fn $first_name:ident(
-            value: $first_type:ty,
-            signed: $first_signed:tt)$(;)?
-        $($rest_vis:vis unsafe fn $rest_name:ident(
-            value: $rest_type:ty,
-            signed: $rest_signed:tt)$(;)?)+
+        $first_vis:vis unsafe fn $first_name:ident $first_num:ty as $first_sign:ident $first_base:ident;
+        $($rest_vis:vis unsafe fn $rest_name:ident $rest_num:ty as $rest_sign:ident $rest_base:ident;)+
     ) =>
     {
-        push_x_to_payload_impl!($first_vis unsafe fn $first_name(
-            value: $first_type,
-            signed: $first_signed));
-        $(push_x_to_payload_impl!($rest_vis unsafe fn $rest_name(
-            value: $rest_type,
-            signed: $rest_signed));)+
+        push_x_to_payload_impl!
+        {
+            $first_vis unsafe fn $first_name $first_num as $first_sign $first_base;
+        }
+        $(
+            push_x_to_payload_impl!
+            {
+                $rest_vis unsafe fn $rest_name $rest_num as $rest_sign $rest_base;
+            }
+        )+
     };
 }
 
@@ -194,45 +231,16 @@ pub unsafe fn push_str_to_payload(value: &'static [u8])
 
 push_x_to_payload_impl!
 {
-    pub unsafe fn push_u8_to_payload(value: u8, signed: false);
-    pub unsafe fn push_i8_to_payload(value: i8, signed: true);
-    pub unsafe fn push_u16_to_payload(value: u16, signed: false);
-    pub unsafe fn push_i16_to_payload(value: i16, signed: true);
-    pub unsafe fn push_u32_to_payload(value: u32, signed: false);
-    pub unsafe fn push_i32_to_payload(value: i32, signed: true);
-    pub unsafe fn push_u64_to_payload(value: u64, signed: false);
-    pub unsafe fn push_i64_to_payload(value: i64, signed: true);
-    pub unsafe fn push_usize_to_payload(value: usize, signed: false);
-    pub unsafe fn push_isize_to_payload(value: isize, signed: true);
-}
-
-pub unsafe fn push_int_to_payload<
-    I: core::ops::Rem<I, Output: Into<usize>>
-        + core::ops::DivAssign<I>
-        + core::cmp::PartialEq<I>
-        + core::marker::Copy
-        + core::ops::Neg<Output: Into<I>>
-        + core::cmp::PartialOrd<I>
-        + From<usize>>(value: I, alphabet: &[&'static [u8]])
-{
-    let mut value = value;
-    let insert_index = _PAYLOAD.len();
-
-    if value < 0.into()
-    {
-        _ = _PAYLOAD.push(b"-");
-        value = (-value).into();
-    }
-
-    loop
-    {
-        let digit = value % alphabet.len().into();
-        value /= alphabet.len().into();
-
-        _ = _PAYLOAD.insert(insert_index, alphabet[digit.into()]);
-
-        if value == 0.into() { break };
-    }
+    pub unsafe fn push_u8_to_payload u8 as unsigned push_u8;
+    pub unsafe fn push_i8_to_payload i8 as signed push_i8;
+    pub unsafe fn push_u16_to_payload u16 as unsigned push_u16;
+    pub unsafe fn push_i16_to_payload i16 as signed push_i16;
+    pub unsafe fn push_u32_to_payload u32 as unsigned push_u32;
+    pub unsafe fn push_i32_to_payload i32 as signed push_i32;
+    pub unsafe fn push_u64_to_payload u64 as unsigned push_u64;
+    pub unsafe fn push_i64_to_payload i64 as signed push_i64;
+    pub unsafe fn push_usize_to_payload usize as unsigned push_usize;
+    pub unsafe fn push_isize_to_payload isize as signed push_isize;
 }
 
 #[inline(never)]
@@ -275,7 +283,7 @@ unsafe fn panic(_: &core::panic::PanicInfo) -> !
         { serial.write_byte(*byte) }
     }
 
-    for byte in b"Resetting...\n"
+    for byte in b"!Resetting...\n"
     { serial.write_byte(*byte) }
 
     delay_ms(1000);

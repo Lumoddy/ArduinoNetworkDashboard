@@ -5,12 +5,7 @@
 
 // mod coder
 mod panic_handler;
-// mod software_serial1;
-// mod software_serial2;
-mod soft_serial;
-// mod cpp_SoftwareSerial;
-mod undo;
-mod base;
+mod soft;
 mod format;
 
 use core::{convert::Infallible, mem};
@@ -18,19 +13,22 @@ use core::{convert::Infallible, mem};
 use arduino_hal::{delay_ms, prelude::_unwrap_infallible_UnwrapInfallible};
 use avr_device::interrupt;
 use heapless::Vec;
-use soft_serial::writer::SoftSerialWriterConfig;
-use soft_serial::{reader, writer};
+use soft::writer::WriterConfig;
+use soft::{exint, reader, writer};
 
-use crate::soft_serial::tc1::{self, SchedulerAllocation, SchedulerTaskContext};
+use soft::tc1;
 
 // use crate::software_serial2::{IntoSoftSerialReaderPin, IntoSoftSerialWriterPin};
 // use software_serial2::*;
 
-static mut TC1_SCHEDULER_ALLOCATION: SchedulerAllocation<16>
-    = SchedulerAllocation::new();
+static mut TC1_SCHEDULER_ALLOCATION: tc1::SchedulerAllocation<16>
+    = tc1::SchedulerAllocation::new();
 
-static mut PRINT: Vec<u8, 256> = Vec::new();
-static mut PRINT_NUMBER: Option<u64> = None;
+static mut EXINT_SCHEDULER_ALLOCATION: exint::SchedulerAllocation<16>
+    = exint::SchedulerAllocation::new();
+
+static mut READER_BUFFER: heapless::Deque<u8, 32> = heapless::Deque::new();
+static mut WRITER_BUFFER: heapless::Deque<u8, 32> = heapless::Deque::new();
 
 #[arduino_hal::entry]
 fn main() -> !
@@ -86,141 +84,96 @@ fn main() -> !
     for byte in b"!Initializing Tests...\n"
     { serial.write_byte(*byte) }
 
-    let Ok(scheduler) = tc1::Scheduler::init(
-        dp.TC1,
-        unsafe { &mut TC1_SCHEDULER_ALLOCATION }) else { unreachable!() };
+    let Ok(tc1_scheduler) = tc1::Scheduler::init(tc1::SchedulerConfig
+    {
+        tc: dp.TC1,
+        allocation: unsafe { &mut TC1_SCHEDULER_ALLOCATION },
+    })
+    else { unreachable!() };
+
+    let Ok(exint_scheduler) = exint::Scheduler::init(exint::SchedulerConfig
+    {
+        exint: dp.EXINT,
+        allocation: unsafe { &mut EXINT_SCHEDULER_ALLOCATION },
+    })
+    else { unreachable!() };
 
     for byte in b"!Starting Tests...\n"
     { serial.write_byte(*byte) }
 
-    let a = soft_serial::writer::init(
-        pins.d2.into_output(),
-        SoftSerialWriterConfig
+    let Ok(mut serial_writer) = soft::writer::init(
+        pins.d13.into_output(),
+        soft::writer::WriterConfig
         {
-            baudrate: todo!(),
-            scheduler,
-            buffer: todo!(),
-            inverse_voltage: todo!(),
-        });
+            baudrate: 9600,
+            tc1: &tc1_scheduler,
+            buffer: unsafe { &mut WRITER_BUFFER },
+            inverse_voltage: false,
+        })
+    else { panic_payload!(str: b"Failed to init serial writer") };
 
-    fn append_a(context: SchedulerTaskContext)
-    {
-        unsafe
+    let Ok(mut serial_reader) = soft::reader::init(
+        pins.d12.into_pull_up_input(),
+        soft::reader::ReaderConfig
         {
-            unwrap_payload!(PRINT.push(b'|'));
-
-            unwrap_payload!(context.scheduler.schedule_task_absolute(
-                0,
-                context.cycles_since_init + 10000,
-                append_a));
-        }
-    }
-
-    fn append_b(context: SchedulerTaskContext)
-    {
-        unsafe
-        {
-            unwrap_payload!(PRINT.push(b'-'));
-
-            unwrap_payload!(context.scheduler.schedule_task_absolute(
-                0,
-                context.cycles_since_init + 2000,
-                append_b));
-        }
-    }
-
-    fn append_c(context: SchedulerTaskContext)
-    {
-        unsafe
-        {
-            unwrap_payload!(PRINT.push(b'('));
-            unwrap_payload!(PRINT.push(b')'));
-
-            unwrap_payload!(context.scheduler.schedule_task_absolute(
-                0,
-                context.cycles_since_init + 1000000,
-                append_c));
-        }
-    }
-
-    fn append_d(context: SchedulerTaskContext)
-    {
-        unsafe
-        {
-            PRINT_NUMBER = Some(context.cycles_since_init);
-
-            unwrap_payload!(context.scheduler.schedule_task_absolute(
-                0,
-                context.cycles_since_init + 10000000,
-                append_d));
-        }
-    }
-
-    unwrap_payload!(scheduler.schedule_task_absolute(0, 10000, append_a));
-    unwrap_payload!(scheduler.schedule_task_absolute(0, 10000, append_b));
-    unwrap_payload!(scheduler.schedule_task_absolute(0, 100000, append_c));
-    unwrap_payload!(scheduler.schedule_task_absolute(0, 1000000, append_d));
-
-    // dp.TC1.tcnt1.write(|w| w.bits(0));
-    // dp.TC1.tccr1a.write(|w| w
-    //     .wgm1().bits(0b__00));
-    // dp.TC1.tccr1b.write(|w| w
-    //     .wgm1().bits(0b01__)
-    //     .cs1().variant(arduino_hal::pac::tc1::tccr1b::CS1_A::PRESCALE_1024));
-    // dp.TC1.timsk1.write(|w| w
-    //     .ocie1a().set_bit()
-    //     .toie1().set_bit());
-    // dp.TC1.ocr1a.write(|w| w
-    //     .bits(200));
-
-    // unsafe
-    // {
-    //     interrupt::enable();
-    // }
+            baudrate: 9600,
+            tc1: &tc1_scheduler,
+            exint: &exint_scheduler,
+            buffer: unsafe { &mut READER_BUFFER },
+            inverse_voltage: false,
+        })
+    else { panic_payload!(str: b"Failed to init serial writer") };
 
     loop
     {
-        interrupt::free(|_| unsafe
-        {
-            let message = mem::replace(&mut PRINT, Vec::new());
+        for byte in b"! ->\n"
+        { serial.write_byte(*byte) }
 
-            for byte in message
-            { serial.write_byte(byte) }
+        if serial_writer.is_writing() || serial_reader.is_reading()
+        {
+            serial.write_byte(b'!');
+            delay_ms(500);
+
+            while serial_writer.is_writing() || serial_reader.is_reading()
+            {
+                serial.write_byte(b'.');
+                delay_ms(500);
+            }
 
             serial.write_byte(b'\n');
-        });
+        }
+
+        delay_ms(1000);
 
         interrupt::free(|_| unsafe
         {
-            if let Some(mut value) = mem::replace(&mut PRINT_NUMBER, None)
+            for byte in b"This has been sent through the soft serial writer.\n"
             {
-                for byte in b"\n[ "
-                { serial.write_byte(*byte) }
-
-                let mut buffer = heapless::Vec::<u8, 16>::new();
-
-                loop
-                {
-                    let digit = value % 10 as u64;
-                    value /= 10 as u64;
-
-                    buffer.push(b'0' + digit as u8);
-
-                    if value == 0 { break };
-                }
-
-                buffer.reverse();
-                for byte in buffer
-                { serial.write_byte(byte) }
-
-                for byte in b" ]\n"
-                { serial.write_byte(*byte) }
+                let Ok(()) = WRITER_BUFFER.push_front(*byte)
+                else { break };
             }
         });
 
-        delay_ms(80);
+        match serial_writer.start_write_now()
+        {
+            Ok(()) => (),
+            Err(writer::WriteError::AlreadyWriting) =>
+            {
+                panic_payload!(str: b"WriteError::AlreadyWriting");
+            },
+            Err(writer::WriteError::NothingToWrite) =>
+            {
+                panic_payload!(str: b"WriteError::NothingToWrite");
+            },
+            Err(writer::WriteError::TaskQueueFull) =>
+            {
+                panic_payload!(str: b"WriteError::TaskQueueFull");
+            },
+        }
 
         avr_device::asm::wdr();
+
+        delay_ms(1000);
     }
 }
 

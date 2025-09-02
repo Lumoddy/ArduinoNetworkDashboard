@@ -1,7 +1,14 @@
 use core::{mem, ptr};
-use arduino_hal::{clock::Clock, hal::port::Dynamic, port::{mode::{self, Output}, Pin, PinOps}, simple_pwm::Prescaler, DefaultClock};
+
+use arduino_hal::clock::Clock;
+use arduino_hal::hal::port::Dynamic;
+use arduino_hal::port::{mode, PinOps, Pin};
+use arduino_hal::simple_pwm::Prescaler;
+use arduino_hal::DefaultClock;
 use avr_device::interrupt;
-use crate::soft_serial::tc1::{self, SchedulerTaskContext};
+
+use crate::soft::tc1;
+use crate::unreachable_payload;
 
 pub trait SoftSerialWriterBufferOps
 {
@@ -33,24 +40,15 @@ pub enum WriteError
 impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
 {
     pub fn deconstruct(self)
-        -> (Pin<mode::Output, PIN>, SoftSerialWriterConfig)
+        -> (Pin<mode::Output, PIN>, &'static mut dyn SoftSerialWriterBufferOps)
     {
         interrupt::free(|_| unsafe
         {
             let Some(writer) = mem::replace(
                 &mut _READERS[self._state_index as usize].0,
-                None) else { unreachable!() };
+                None) else { unreachable_payload!() };
 
-            (
-                self._ghost_pin,
-                SoftSerialWriterConfig
-                {
-                    baudrate: writer._baudrate,
-                    scheduler: writer._scheduler,
-                    buffer: writer._buffer,
-                    inverse_voltage: !writer._high_is_one,
-                },
-            )
+            (self._ghost_pin, writer._buffer)
         })
     }
 
@@ -59,7 +57,7 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
         interrupt::free(|_| unsafe
         {
             let Some(writer) = &mut _READERS[self._state_index as usize].0
-            else { unreachable!() };
+            else { unreachable_payload!() };
 
             match writer._phase
             {
@@ -71,7 +69,7 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
                     let Some(byte) = writer._buffer.pop_back()
                     else { return Err(WriteError::NothingToWrite) };
 
-                    writer._pin.set_high();
+                    writer._set_pin(true);
 
                     writer._phase = _WriterPhase::StartBit(byte);
 
@@ -79,7 +77,7 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
                         0xFF,
                         writer._baud_cycles,
                         _READERS[self._state_index as usize].1)
-                    else { unreachable!() };
+                    else { unreachable_payload!() };
 
                     Ok(())
                 },
@@ -87,31 +85,58 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
             }
         })
     }
+
+    pub fn is_writing(&self) -> bool
+    {
+        interrupt::free(|_| unsafe
+        {
+            let Some(writer) = &mut _READERS[self._state_index as usize].0
+            else { unreachable_payload!() };
+
+            !matches!(writer._phase, _WriterPhase::Idle)
+        })
+    }
+
+    pub fn err(&self) -> Option<WriteError>
+    {
+        interrupt::free(|_| unsafe
+        {
+            let Some(writer) = &mut _READERS[self._state_index as usize].0
+            else { unreachable_payload!() };
+
+            if let _WriterPhase::Err(error) = writer._phase
+            { Some(error) }
+            else
+            { None }
+        })
+    }
 }
 
-enum InitError<
+pub enum InitError<
+    's,
     PIN: PinOps<Dynamic = Dynamic>,
     Buffer: 'static + SoftSerialWriterBufferOps + ?Sized
         = dyn 'static + SoftSerialWriterBufferOps>
 {
     TooManyWriters(
         Pin<mode::Output, PIN>,
-        SoftSerialWriterConfig<Buffer>),
+        WriterConfig<'s, Buffer>),
 }
 
-pub struct SoftSerialWriterConfig<
+pub struct WriterConfig<
+    's,
     Buffer: 'static + SoftSerialWriterBufferOps + ?Sized
         = dyn 'static + SoftSerialWriterBufferOps>
 {
-    baudrate: u32,
-    scheduler: tc1::Scheduler,
-    buffer: &'static mut Buffer,
-    inverse_voltage: bool,
+    pub baudrate: u32,
+    pub tc1: &'s tc1::Scheduler,
+    pub buffer: &'static mut Buffer,
+    pub inverse_voltage: bool,
 }
 
 pub fn init<PIN: PinOps<Dynamic = Dynamic>>(
-    pin: Pin<Output, PIN>,
-    config: SoftSerialWriterConfig)
+    pin: Pin<mode::Output, PIN>,
+    config: WriterConfig)
     -> Result<SoftSerialWriter<PIN>, InitError<PIN>>
 {
     unsafe
@@ -131,7 +156,7 @@ pub fn init<PIN: PinOps<Dynamic = Dynamic>>(
                 _pin: pin.downgrade(),
                 _buffer: config.buffer,
                 _phase: _WriterPhase::Idle,
-                _scheduler: config.scheduler,
+                _scheduler: tc1::Scheduler::steal_copy(config.tc1),
                 _baudrate: config.baudrate,
                 _baud_cycles: DefaultClock::FREQ as u64
                     / (config.baudrate as u64 * match tc1::PRESCALER
@@ -176,25 +201,15 @@ impl _WriterState
 {
     fn _process_state(
         &mut self,
-        context: SchedulerTaskContext,
-        process_state_task: fn(SchedulerTaskContext))
+        context: tc1::SchedulerTaskContext,
+        process_state_task: fn(tc1::SchedulerTaskContext))
     {
         match self._phase
         {
-            _WriterPhase::Idle =>
-            {
-                self._pin.set_low();
-            },
+            _WriterPhase::Idle => (),
             _WriterPhase::StartBit(buffer) =>
             {
-                if ((buffer & 0x1) != 0) == self._high_is_one
-                {
-                    self._pin.set_low();
-                }
-                else
-                {
-                    self._pin.set_high();
-                }
+                self._set_pin((buffer & 0x1) != 0);
 
                 self._phase = _WriterPhase::Bit(buffer.unbounded_shr(1) | 0x80);
 
@@ -212,14 +227,7 @@ impl _WriterState
             {
                 let next_buffer = buffer.unbounded_shr(1);
 
-                if ((buffer & 0x1) != 0) == self._high_is_one
-                {
-                    self._pin.set_low();
-                }
-                else
-                {
-                    self._pin.set_high();
-                }
+                self._set_pin((buffer & 0x1) != 0);
 
                 if next_buffer == 0x1
                 {
@@ -255,11 +263,13 @@ impl _WriterState
                 let Some(byte) = self._buffer.pop_back()
                 else
                 {
-                    self._pin.set_low();
+                    self._phase = _WriterPhase::Idle;
+
+                    self._set_pin(false);
                     return
                 };
 
-                self._pin.set_high();
+                self._set_pin(true);
 
                 self._phase = _WriterPhase::StartBit(byte);
 
@@ -276,9 +286,17 @@ impl _WriterState
             _WriterPhase::Err(_) => (),
         }
     }
+
+    fn _set_pin(&mut self, one: bool)
+    {
+        if one == self._high_is_one
+        { self._pin.set_low() }
+        else
+        { self._pin.set_high() }
+    }
 }
 
-static mut _READERS: [(Option<_WriterState>, fn(SchedulerTaskContext)); 4] =
+static mut _READERS: [(Option<_WriterState>, fn(tc1::SchedulerTaskContext)); 4] =
 [
     (None, |cs| unsafe
     {
