@@ -1,7 +1,7 @@
 use arduino_hal::pac;
 use avr_device::interrupt::CriticalSection;
 
-use super::{PinPortID, Scheduler, SchedulerAllocationOps, SchedulerTaskContext};
+use super::{PinPortID, PinEdge, Scheduler, SchedulerAllocationOps, SchedulerTaskContext};
 
 pub(super) struct _SchedulerState
 {
@@ -26,7 +26,7 @@ unsafe fn PCINT0()
 
     for i in (0..scheduler.allocation.len()).rev()
     {
-        let (pin, _) = scheduler.allocation.index(i);
+        let (pin, edge, _) = scheduler.allocation.index(i);
         let index: u8 = match pin
         {
             PinPortID::PB0 => 0,
@@ -40,16 +40,25 @@ unsafe fn PCINT0()
             _ => continue,
         };
 
-        if ((scheduler.last_pinb >> index) & 1)
-            != ((current_value >> index) & 1)
+        if matches!(
+            (
+                edge,
+                ((scheduler.last_pinb >> index) & 1) != 0,
+                ((current_value >> index) & 1) != 0,
+            ),
+            (PinEdge::Any, false, true)
+            | (PinEdge::Any, true, false)
+            | (PinEdge::LowToHigh, false, true)
+            | (PinEdge::HighToLow, true, false))
         {
-            let (_, task) = scheduler.allocation.remove(i);
+            let (pin, _, task) = scheduler.allocation.remove(i);
 
             task(SchedulerTaskContext
             {
                 scheduler: &Scheduler { _private: () },
                 cs: CriticalSection::new(),
                 pin_is_high: (current_value >> index) != 0,
+                pin,
             });
         }
     }
@@ -66,7 +75,7 @@ unsafe fn PCINT1()
 
     for i in (0..scheduler.allocation.len()).rev()
     {
-        let (pin, _) = scheduler.allocation.index(i);
+        let (pin, edge, _) = scheduler.allocation.index(i);
         let index: u8 = match pin
         {
             PinPortID::PC0 => 0,
@@ -79,16 +88,25 @@ unsafe fn PCINT1()
             _ => continue,
         };
 
-        if ((scheduler.last_pinc >> index) & 1)
-            != ((current_value >> index) & 1)
+        if matches!(
+            (
+                edge,
+                ((scheduler.last_pinc >> index) & 1) != 0,
+                ((current_value >> index) & 1) != 0,
+            ),
+            (PinEdge::Any, false, true)
+            | (PinEdge::Any, true, false)
+            | (PinEdge::LowToHigh, false, true)
+            | (PinEdge::HighToLow, true, false))
         {
-            let (_, task) = scheduler.allocation.remove(i);
+            let (pin, _, task) = scheduler.allocation.remove(i);
 
             task(SchedulerTaskContext
             {
                 scheduler: &Scheduler { _private: () },
                 cs: CriticalSection::new(),
                 pin_is_high: (current_value >> index) != 0,
+                pin,
             });
         }
     }
@@ -105,7 +123,7 @@ unsafe fn PCINT2()
 
     for i in (0..scheduler.allocation.len()).rev()
     {
-        let (pin, _) = scheduler.allocation.index(i);
+        let (pin, edge, _) = scheduler.allocation.index(i);
         let index: u8 = match pin
         {
             PinPortID::PD0 => 0,
@@ -119,16 +137,25 @@ unsafe fn PCINT2()
             _ => continue,
         };
 
-        if ((scheduler.last_pind >> index) & 1)
-            != ((current_value >> index) & 1)
+        if matches!(
+            (
+                edge,
+                ((scheduler.last_pind >> index) & 1) != 0,
+                ((current_value >> index) & 1) != 0,
+            ),
+            (PinEdge::Any, false, true)
+            | (PinEdge::Any, true, false)
+            | (PinEdge::LowToHigh, false, true)
+            | (PinEdge::HighToLow, true, false))
         {
-            let (_, task) = scheduler.allocation.remove(i);
+            let (pin, _, task) = scheduler.allocation.remove(i);
 
             task(SchedulerTaskContext
             {
                 scheduler: &Scheduler { _private: () },
                 cs: CriticalSection::new(),
                 pin_is_high: (current_value >> index) != 0,
+                pin,
             });
         }
     }

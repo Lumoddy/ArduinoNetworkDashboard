@@ -7,7 +7,7 @@ use arduino_hal::simple_pwm::Prescaler;
 use arduino_hal::DefaultClock;
 use avr_device::interrupt;
 
-use crate::soft::exint::{self, StaticIntoPinID};
+use crate::soft::exint::{self, IntoPinID, PinEdge, PinPortID, StaticIntoPinID};
 use crate::soft::tc1;
 use crate::unreachable_payload;
 
@@ -34,6 +34,7 @@ pub struct SoftSerialReader<PIN: PinOps<Dynamic = Dynamic>>
 pub enum ReadError
 {
     AlreadyWriting,
+    BufferFull,
     TaskQueueFull,
 }
 
@@ -51,7 +52,7 @@ impl<PIN: PinOps<Dynamic = Dynamic> + StaticIntoPinID> SoftSerialReader<PIN>
 
             (
                 self._ghost_pin,
-                reader._buffer,
+                reader.buffer,
             )
         })
     }
@@ -60,22 +61,23 @@ impl<PIN: PinOps<Dynamic = Dynamic> + StaticIntoPinID> SoftSerialReader<PIN>
     {
         interrupt::free(|_| unsafe
         {
-            let Some(reader) = &mut _READERS[self._state_index as usize].0
+            let (Some(reader), process_state_task)
+                = &mut _READERS[self._state_index as usize]
             else { unreachable_payload!() };
 
-            match reader._phase
+            match reader.next_phase
             {
                 _ReaderPhase::Idle =>
                 {
-                    reader._phase = _ReaderPhase::StartBit;
+                    reader.next_phase = _ReaderPhase::StartBit;
 
-                    let Ok(()) = reader._tc1.schedule_task_cycles(
+                    let Ok(()) = reader.tc1.schedule_task_cycles(
                         0xFF,
-                        reader._baud_cycles / 2,
-                        _READERS[self._state_index as usize].1)
+                        reader.baud_cycles / 2,
+                        *process_state_task)
                     else
                     {
-                        reader._phase = _ReaderPhase::Err(
+                        reader.next_phase = _ReaderPhase::Err(
                             ReadError::TaskQueueFull);
                         return Err(ReadError::TaskQueueFull);
                     };
@@ -94,7 +96,7 @@ impl<PIN: PinOps<Dynamic = Dynamic> + StaticIntoPinID> SoftSerialReader<PIN>
             let Some(writer) = &mut _READERS[self._state_index as usize].0
             else { unreachable_payload!() };
 
-            !matches!(writer._phase, _ReaderPhase::Idle)
+            !matches!(writer.next_phase, _ReaderPhase::Idle)
         })
     }
 
@@ -105,7 +107,7 @@ impl<PIN: PinOps<Dynamic = Dynamic> + StaticIntoPinID> SoftSerialReader<PIN>
             let Some(reader) = &mut _READERS[self._state_index as usize].0
             else { unreachable_payload!() };
 
-            if let _ReaderPhase::Err(error) = reader._phase
+            if let _ReaderPhase::Err(error) = reader.next_phase
             { Some(error) }
             else
             { None }
@@ -119,6 +121,9 @@ pub enum InitError<
     Buffer: 'static + ?Sized + SoftSerialReaderBufferOps
         = dyn 'static + SoftSerialReaderBufferOps>
 {
+    TaskQueueFull(
+        Pin<mode::Input<mode::PullUp>, PIN>,
+        ReaderConfig<'s, Buffer>),
     TooManyReaders(
         Pin<mode::Input<mode::PullUp>, PIN>,
         ReaderConfig<'s, Buffer>),
@@ -143,9 +148,9 @@ pub fn init<PIN: PinOps<Dynamic = Dynamic> + StaticIntoPinID>(
 {
     unsafe
     {
-        for (i, reader) in &mut _READERS.iter_mut().enumerate()
+        for (i, (reader, _)) in &mut _READERS.iter_mut().enumerate()
         {
-            let None = reader.0 else { continue };
+            let None = reader else { continue };
 
             let result = SoftSerialReader
             {
@@ -153,15 +158,25 @@ pub fn init<PIN: PinOps<Dynamic = Dynamic> + StaticIntoPinID>(
                 _state_index: i as u8,
             };
 
-            reader.0 = Some(_ReaderState
+            let high_is_one = config.inverse_voltage;
+
+            let Ok(()) = config.exint.schedule_task(
+                pin.id(),
+                if high_is_one { PinEdge::LowToHigh }
+                else { PinEdge::HighToLow },
+                _read_pin_now_task)
+            else { return Err(InitError::TaskQueueFull(pin, config)) };
+
+            *reader = Some(_ReaderState
             {
-                _pin: pin.downgrade(),
-                _buffer: config.buffer,
-                _phase: _ReaderPhase::Idle,
-                _tc1: tc1::Scheduler::steal_copy(config.tc1),
-                _exint: exint::Scheduler::steal_copy(config.exint),
-                _baudrate: config.baudrate,
-                _baud_cycles: DefaultClock::FREQ as u64
+                pin_id: pin.id(),
+                pin: pin.downgrade(),
+                buffer: config.buffer,
+                next_phase: _ReaderPhase::Idle,
+                tc1: tc1::Scheduler::steal_copy(config.tc1),
+                exint: exint::Scheduler::steal_copy(config.exint),
+                baudrate: config.baudrate,
+                baud_cycles: DefaultClock::FREQ as u64
                     / (config.baudrate as u64 * match tc1::PRESCALER
                     {
                         Prescaler::Direct => 1,
@@ -170,7 +185,7 @@ pub fn init<PIN: PinOps<Dynamic = Dynamic> + StaticIntoPinID>(
                         Prescaler::Prescale256 => 256,
                         Prescaler::Prescale1024 => 1024,
                     }),
-                _high_is_one: !config.inverse_voltage,
+                high_is_one,
             });
 
             return Ok(result);
@@ -184,20 +199,28 @@ enum _ReaderPhase
 {
     Idle,
     StartBit,
-    Bit(u8),
+    Bit0,
+    Bit1(u8),
+    Bit2(u8),
+    Bit3(u8),
+    Bit4(u8),
+    Bit5(u8),
+    Bit6(u8),
+    Bit7(u8),
     Err(ReadError)
 }
 
 struct _ReaderState
 {
-    _pin: Pin<mode::Input<mode::PullUp>, Dynamic>,
-    _buffer: &'static mut dyn SoftSerialReaderBufferOps,
-    _phase: _ReaderPhase,
-    _tc1: tc1::Scheduler,
-    _exint: exint::Scheduler,
-    _baudrate: u32,
-    _baud_cycles: u64,
-    _high_is_one: bool,
+    pub pin_id: PinPortID,
+    pub pin: Pin<mode::Input<mode::PullUp>, Dynamic>,
+    pub buffer: &'static mut dyn SoftSerialReaderBufferOps,
+    pub next_phase: _ReaderPhase,
+    pub tc1: tc1::Scheduler,
+    pub exint: exint::Scheduler,
+    pub baudrate: u32,
+    pub baud_cycles: u64,
+    pub high_is_one: bool,
 }
 
 impl _ReaderState
@@ -207,85 +230,175 @@ impl _ReaderState
         context: tc1::SchedulerTaskContext,
         process_state_task: fn(tc1::SchedulerTaskContext))
     {
-        match self._phase
+        match self.next_phase
         {
             _ReaderPhase::Idle => (),
+            _ReaderPhase::Err(_) => (),
             _ReaderPhase::StartBit =>
             {
+                self.buffer.push_front(b'1');
+
                 if self._pin_is_one()
                 {
-                    self._phase = _ReaderPhase::Bit(1);
+                    self.buffer.push_front(b'^');
 
-                    let Ok(()) = self._tc1.schedule_task_absolute(
+                    self.next_phase = _ReaderPhase::Bit0;
+
+                    let Ok(()) = self.tc1.schedule_task_absolute(
                         0xFF,
-                        context.cycles_since_init + self._baud_cycles,
+                        context.cycles_since_init + self.baud_cycles,
                         process_state_task)
                     else
                     {
-                        self._phase = _ReaderPhase::Err(
+                        self.next_phase = _ReaderPhase::Err(
                             ReadError::TaskQueueFull);
                         return;
                     };
                 }
                 else
                 {
-                    self._phase = _ReaderPhase::Idle;
+                    self.buffer.push_front(b'v');
+
+                    self.next_phase = _ReaderPhase::Idle;
+
+                    let Ok(()) = self.exint.schedule_task(
+                        self.pin_id,
+                        if self.high_is_one { PinEdge::LowToHigh }
+                        else { PinEdge::HighToLow },
+                        _read_pin_now_task)
+                    else
+                    {
+                        self.next_phase = _ReaderPhase::Err(
+                            ReadError::TaskQueueFull);
+                        return;
+                    };
                 }
             },
-            _ReaderPhase::Bit(accumulate) =>
+            _ReaderPhase::Bit0 =>
             {
-                let mut next_accumulate = accumulate.unbounded_shl(1);
+                self.buffer.push_front(b'2');
 
                 if self._pin_is_one()
                 {
-                    next_accumulate |= 1;
+                    self.buffer.push_front(b'^');
+
+                    self.next_phase = _ReaderPhase::Bit1(1);
+                }
+                else
+                {
+                    self.buffer.push_front(b'v');
+
+                    self.next_phase = _ReaderPhase::Bit1(0);
                 }
 
-                if (accumulate & 0x80) == 0
+                let Ok(()) = self.tc1.schedule_task_absolute(
+                    0xFF,
+                    context.cycles_since_init + self.baud_cycles,
+                    process_state_task)
+                else
                 {
-                    self._phase = _ReaderPhase::Bit(next_accumulate);
+                    self.next_phase = _ReaderPhase::Err(
+                        ReadError::TaskQueueFull);
+                    return;
+                };
+            }
+            _ReaderPhase::Bit1(byte)
+            | _ReaderPhase::Bit2(byte)
+            | _ReaderPhase::Bit3(byte)
+            | _ReaderPhase::Bit4(byte)
+            | _ReaderPhase::Bit5(byte)
+            | _ReaderPhase::Bit6(byte) =>
+            {
+                self.buffer.push_front(b'2');
 
-                    let Ok(()) = self._tc1.schedule_task_absolute(
-                        0xFF,
-                        context.cycles_since_init + self._baud_cycles,
-                        process_state_task)
-                    else
+                if self._pin_is_one()
+                {
+                    self.buffer.push_front(b'^');
+
+                    self.next_phase = match self.next_phase
                     {
-                        self._phase = _ReaderPhase::Err(
-                            ReadError::TaskQueueFull);
-                        return;
+                        _ReaderPhase::Bit1(_) => _ReaderPhase::Bit2(byte | (1 << 1)),
+                        _ReaderPhase::Bit2(_) => _ReaderPhase::Bit3(byte | (1 << 2)),
+                        _ReaderPhase::Bit3(_) => _ReaderPhase::Bit4(byte | (1 << 3)),
+                        _ReaderPhase::Bit4(_) => _ReaderPhase::Bit5(byte | (1 << 4)),
+                        _ReaderPhase::Bit5(_) => _ReaderPhase::Bit6(byte | (1 << 5)),
+                        _ReaderPhase::Bit6(_) => _ReaderPhase::Bit7(byte | (1 << 6)),
+                        _ => unreachable_payload!(),
                     };
                 }
                 else
                 {
-                    self._phase = _ReaderPhase::StartBit;
-                    let Ok(()) = self._buffer.push_front(next_accumulate)
-                    else
-                    {
-                        self._phase = _ReaderPhase::Err(
-                            ReadError::TaskQueueFull);
-                        return;
-                    };
+                    self.buffer.push_front(b'v');
 
-                    let Ok(()) = self._tc1.schedule_task_absolute(
-                        0xFF,
-                        context.cycles_since_init + (self._baud_cycles * 2),
-                        process_state_task)
-                    else
+                    self.next_phase = match self.next_phase
                     {
-                        self._phase = _ReaderPhase::Err(
-                            ReadError::TaskQueueFull);
-                        return;
+                        _ReaderPhase::Bit1(_) => _ReaderPhase::Bit2(byte),
+                        _ReaderPhase::Bit2(_) => _ReaderPhase::Bit3(byte),
+                        _ReaderPhase::Bit3(_) => _ReaderPhase::Bit4(byte),
+                        _ReaderPhase::Bit4(_) => _ReaderPhase::Bit5(byte),
+                        _ReaderPhase::Bit5(_) => _ReaderPhase::Bit6(byte),
+                        _ReaderPhase::Bit6(_) => _ReaderPhase::Bit7(byte),
+                        _ => unreachable_payload!(),
                     };
                 }
+
+                let Ok(()) = self.tc1.schedule_task_absolute(
+                    0xFF,
+                    context.cycles_since_init + self.baud_cycles,
+                    process_state_task)
+                else
+                {
+                    self.next_phase = _ReaderPhase::Err(
+                        ReadError::TaskQueueFull);
+                    return;
+                };
             },
-            _ReaderPhase::Err(_) => (),
+            _ReaderPhase::Bit7(byte) =>
+            {
+                self.buffer.push_front(b'D');
+
+                let final_byte;
+
+                if self._pin_is_one()
+                {
+                    self.buffer.push_front(b'^');
+
+                    final_byte = byte | (1 << 7);
+                }
+                else
+                {
+                    self.buffer.push_front(b'v');
+
+                    final_byte = byte;
+                }
+
+                self.next_phase = _ReaderPhase::StartBit;
+
+                let Ok(()) = self.buffer.push_front(final_byte)
+                else
+                {
+                    self.next_phase = _ReaderPhase::Err(
+                        ReadError::BufferFull);
+                    return;
+                };
+
+                let Ok(()) = self.tc1.schedule_task_absolute(
+                    0xFF,
+                    context.cycles_since_init + (self.baud_cycles * 2),
+                    process_state_task)
+                else
+                {
+                    self.next_phase = _ReaderPhase::Err(
+                        ReadError::TaskQueueFull);
+                    return;
+                };
+            }
         }
     }
 
     fn _pin_is_one(&self) -> bool
     {
-        self._pin.is_high() == self._high_is_one
+        self.pin.is_high() == self.high_is_one
     }
 }
 
@@ -320,3 +433,38 @@ static mut _READERS: [(Option<_ReaderState>, fn(tc1::SchedulerTaskContext)); 4] 
         reader._process_state(cs, _READERS[3].1);
     }),
 ];
+
+fn _read_pin_now_task(context: exint::SchedulerTaskContext)
+{
+    unsafe
+    {
+        for reader in &mut _READERS.iter_mut()
+        {
+            let (Some(reader), process_state_task) = reader else { continue };
+
+            if reader.high_is_one != context.pin_is_high { continue };
+
+            if reader.pin_id != context.pin { continue };
+
+            match reader.next_phase
+            {
+                _ReaderPhase::Idle =>
+                {
+                    reader.next_phase = _ReaderPhase::StartBit;
+
+                    let Ok(()) = reader.tc1.schedule_task_cycles(
+                        0xFF,
+                        reader.baud_cycles / 2,
+                        *process_state_task)
+                    else
+                    {
+                        reader.next_phase = _ReaderPhase::Err(
+                            ReadError::TaskQueueFull);
+                        return;
+                    };
+                },
+                _ => (),
+            }
+        }
+    }
+}

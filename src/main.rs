@@ -27,8 +27,8 @@ static mut TC1_SCHEDULER_ALLOCATION: tc1::SchedulerAllocation<16>
 static mut EXINT_SCHEDULER_ALLOCATION: exint::SchedulerAllocation<16>
     = exint::SchedulerAllocation::new();
 
-static mut READER_BUFFER: heapless::Deque<u8, 32> = heapless::Deque::new();
-static mut WRITER_BUFFER: heapless::Deque<u8, 32> = heapless::Deque::new();
+static mut READER_BUFFER: heapless::Deque<u8, 64> = heapless::Deque::new();
+static mut WRITER_BUFFER: heapless::Deque<u8, 64> = heapless::Deque::new();
 
 #[arduino_hal::entry]
 fn main() -> !
@@ -89,14 +89,14 @@ fn main() -> !
         tc: dp.TC1,
         allocation: unsafe { &mut TC1_SCHEDULER_ALLOCATION },
     })
-    else { unreachable!() };
+    else { unreachable_payload!() };
 
     let Ok(exint_scheduler) = exint::Scheduler::init(exint::SchedulerConfig
     {
         exint: dp.EXINT,
         allocation: unsafe { &mut EXINT_SCHEDULER_ALLOCATION },
     })
-    else { unreachable!() };
+    else { unreachable_payload!() };
 
     for byte in b"!Starting Tests...\n"
     { serial.write_byte(*byte) }
@@ -105,7 +105,7 @@ fn main() -> !
         pins.d13.into_output(),
         soft::writer::WriterConfig
         {
-            baudrate: 9600,
+            baudrate: 2,
             tc1: &tc1_scheduler,
             buffer: unsafe { &mut WRITER_BUFFER },
             inverse_voltage: false,
@@ -116,7 +116,7 @@ fn main() -> !
         pins.d12.into_pull_up_input(),
         soft::reader::ReaderConfig
         {
-            baudrate: 9600,
+            baudrate: 2,
             tc1: &tc1_scheduler,
             exint: &exint_scheduler,
             buffer: unsafe { &mut READER_BUFFER },
@@ -129,25 +129,10 @@ fn main() -> !
         for byte in b"! ->\n"
         { serial.write_byte(*byte) }
 
-        if serial_writer.is_writing() || serial_reader.is_reading()
-        {
-            serial.write_byte(b'!');
-            delay_ms(500);
-
-            while serial_writer.is_writing() || serial_reader.is_reading()
-            {
-                serial.write_byte(b'.');
-                delay_ms(500);
-            }
-
-            serial.write_byte(b'\n');
-        }
-
-        delay_ms(1000);
-
         interrupt::free(|_| unsafe
         {
-            for byte in b"This has been sent through the soft serial writer.\n"
+            // for byte in b"This has been sent through the soft serial writer.\n"
+            for byte in b"5"
             {
                 let Ok(()) = WRITER_BUFFER.push_front(*byte)
                 else { break };
@@ -170,6 +155,59 @@ fn main() -> !
                 panic_payload!(str: b"WriteError::TaskQueueFull");
             },
         }
+
+        for byte in b"Read: \""
+        { serial.write_byte(*byte) }
+
+        while serial_writer.is_writing() || serial_reader.is_reading()
+        {
+            if let Some(byte) = interrupt::free(
+                |_| unsafe { READER_BUFFER.pop_back() })
+            {
+                serial.write_byte(byte);
+            }
+
+            delay_ms(10);
+        }
+
+        for byte in b"\"\n"
+        { serial.write_byte(*byte) }
+
+        delay_ms(1000);
+
+        match serial_reader.err()
+        {
+            Some(reader::ReadError::AlreadyWriting) =>
+            {
+                panic_payload!(str: b"ReadError::AlreadyWriting");
+            },
+            Some(reader::ReadError::BufferFull) =>
+            {
+                panic_payload!(str: b"ReadError::BufferFull");
+            },
+            Some(reader::ReadError::TaskQueueFull) =>
+            {
+                panic_payload!(str: b"ReadError::TaskQueueFull");
+            },
+            None => (),
+        }
+
+        // if serial_reader.is_reading()
+        // {
+        //     panic_payload!(str: b"IsReading");
+        // }
+
+        interrupt::free(|_| unsafe
+        {
+            for byte in b"Excess: \""
+            { serial.write_byte(*byte) }
+
+            while let Some(byte) = READER_BUFFER.pop_back()
+            { serial.write_byte(byte) }
+
+            for byte in b"\"\n"
+            { serial.write_byte(*byte) }
+        });
 
         avr_device::asm::wdr();
 

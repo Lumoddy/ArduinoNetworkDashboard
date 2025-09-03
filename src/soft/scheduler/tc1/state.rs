@@ -41,14 +41,14 @@ unsafe fn TIMER1_COMPA()
             scheduler.tc.ocr1a.write(|w| w
                 .bits(0xFFFF));
             scheduler.tc.tifr1.write(|w| w
-                .ocf1a().clear_bit());
+                .ocf1a().set_bit());
         },
         Some(None) =>
         {
             scheduler.tc.ocr1a.write(|w| w
                 .bits(0xFFFF));
             scheduler.tc.tifr1.write(|w| w
-                .ocf1a().set_bit());
+                .ocf1a().clear_bit());
         },
         Some(Some(delta_cycle_count)) =>
         {
@@ -58,7 +58,7 @@ unsafe fn TIMER1_COMPA()
             if scheduler.tc.tcnt1.read().bits() < delta_cycle_count as u16
             {
                 scheduler.tc.tifr1.write(|w| w
-                    .ocf1a().set_bit());
+                    .ocf1a().clear_bit());
             }
         },
     }

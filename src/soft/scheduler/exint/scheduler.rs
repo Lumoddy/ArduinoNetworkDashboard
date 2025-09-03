@@ -13,6 +13,7 @@ pub struct SchedulerTaskContext<'cs>
     pub scheduler: &'cs Scheduler,
     pub cs: CriticalSection<'cs>,
     pub pin_is_high: bool,
+    pub pin: PinPortID,
 }
 
 pub trait StaticIntoPinID
@@ -77,6 +78,13 @@ pub struct SchedulerConfig<
     pub allocation: &'static mut Allocation,
 }
 
+pub enum PinEdge
+{
+    Any,
+    LowToHigh,
+    HighToLow,
+}
+
 pub struct Scheduler { pub(super) _private: () }
 
 impl Scheduler
@@ -91,12 +99,8 @@ impl Scheduler
             {
                 None =>
                 {
-                    config.exint.eicra.write(|w| w
-                        .isc0().variant(ISC0_A::VAL_0X01)
-                        .isc1().variant(ISC1_A::VAL_0X01));
-                    config.exint.eimsk.write(|w| w
-                        .int0().set_bit()
-                        .int1().set_bit());
+                    interrupt::disable();
+
                     config.exint.pcicr.write(|w| w
                         .pcie().bits(0b111));
                     config.exint.pcmsk0.write(|w| w
@@ -168,6 +172,7 @@ impl Scheduler
     pub fn schedule_task(
         &self,
         pin: PinPortID,
+        edge: PinEdge,
         task: fn(SchedulerTaskContext)) -> Result<(), ()>
     {
         interrupt::free(|_| unsafe
@@ -179,7 +184,7 @@ impl Scheduler
                     str: b"EXINT Scheduler was initiated in an illegal way.");
             };
 
-            scheduler.allocation.schedule_task(pin, task)?;
+            scheduler.allocation.push_task(pin, edge, task)?;
 
             match pin
             {
@@ -191,8 +196,8 @@ impl Scheduler
                 | PinPortID::PB5
                 | PinPortID::PB6
                 | PinPortID::PB7 => scheduler.exint.pcmsk0.modify(|r, w| w
-                    .pcint().bits(r.pcint().bits()
-                        | (1 << match pin
+                    .pcint().bits(
+                        r.pcint().bits() | (1 << match pin
                         {
                             PinPortID::PB0 => 0,
                             PinPortID::PB1 => 1,
@@ -212,8 +217,8 @@ impl Scheduler
                 | PinPortID::PC4
                 | PinPortID::PC5
                 | PinPortID::PC6 => scheduler.exint.pcmsk1.modify(|r, w| w
-                    .pcint().bits(r.pcint().bits()
-                        | (1 << match pin
+                    .pcint().bits(
+                        r.pcint().bits() | (1 << match pin
                         {
                             PinPortID::PC0 => 0,
                             PinPortID::PC1 => 1,
@@ -233,8 +238,8 @@ impl Scheduler
                 | PinPortID::PD5
                 | PinPortID::PD6
                 | PinPortID::PD7 => scheduler.exint.pcmsk2.modify(|r, w| w
-                    .pcint().bits(r.pcint().bits()
-                        | (1 << match pin
+                    .pcint().bits(
+                        r.pcint().bits() | (1 << match pin
                         {
                             PinPortID::PD0 => 0,
                             PinPortID::PD1 => 1,

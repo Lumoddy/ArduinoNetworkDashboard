@@ -48,7 +48,7 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
                 &mut _READERS[self._state_index as usize].0,
                 None) else { unreachable_payload!() };
 
-            (self._ghost_pin, writer._buffer)
+            (self._ghost_pin, writer.buffer)
         })
     }
 
@@ -56,27 +56,28 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
     {
         interrupt::free(|_| unsafe
         {
-            let Some(writer) = &mut _READERS[self._state_index as usize].0
+            let (Some(writer), process_state_task)
+                = &mut _READERS[self._state_index as usize]
             else { unreachable_payload!() };
 
-            match writer._phase
+            match writer.last_phase
             {
                 _WriterPhase::Idle =>
                 {
-                    if !writer._scheduler.can_schedule_task()
+                    if !writer.scheduler.can_schedule_task()
                     { return Err(WriteError::TaskQueueFull) };
 
-                    let Some(byte) = writer._buffer.pop_back()
+                    let Some(byte) = writer.buffer.pop_back()
                     else { return Err(WriteError::NothingToWrite) };
 
                     writer._set_pin(true);
 
-                    writer._phase = _WriterPhase::StartBit(byte);
+                    writer.last_phase = _WriterPhase::StartBit(byte);
 
-                    let Ok(()) = writer._scheduler.schedule_task_cycles(
+                    let Ok(()) = writer.scheduler.schedule_task_cycles(
                         0xFF,
-                        writer._baud_cycles,
-                        _READERS[self._state_index as usize].1)
+                        writer.baud_cycles,
+                        *process_state_task)
                     else { unreachable_payload!() };
 
                     Ok(())
@@ -93,7 +94,7 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
             let Some(writer) = &mut _READERS[self._state_index as usize].0
             else { unreachable_payload!() };
 
-            !matches!(writer._phase, _WriterPhase::Idle)
+            !matches!(writer.last_phase, _WriterPhase::Idle)
         })
     }
 
@@ -104,7 +105,7 @@ impl<PIN: PinOps<Dynamic = Dynamic>> SoftSerialWriter<PIN>
             let Some(writer) = &mut _READERS[self._state_index as usize].0
             else { unreachable_payload!() };
 
-            if let _WriterPhase::Err(error) = writer._phase
+            if let _WriterPhase::Err(error) = writer.last_phase
             { Some(error) }
             else
             { None }
@@ -153,12 +154,12 @@ pub fn init<PIN: PinOps<Dynamic = Dynamic>>(
 
             writer.0 = Some(_WriterState
             {
-                _pin: pin.downgrade(),
-                _buffer: config.buffer,
-                _phase: _WriterPhase::Idle,
-                _scheduler: tc1::Scheduler::steal_copy(config.tc1),
-                _baudrate: config.baudrate,
-                _baud_cycles: DefaultClock::FREQ as u64
+                pin: pin.downgrade(),
+                buffer: config.buffer,
+                last_phase: _WriterPhase::Idle,
+                scheduler: tc1::Scheduler::steal_copy(config.tc1),
+                baudrate: config.baudrate,
+                baud_cycles: DefaultClock::FREQ as u64
                     / (config.baudrate as u64 * match tc1::PRESCALER
                     {
                         Prescaler::Direct => 1,
@@ -167,7 +168,7 @@ pub fn init<PIN: PinOps<Dynamic = Dynamic>>(
                         Prescaler::Prescale256 => 256,
                         Prescaler::Prescale1024 => 1024,
                     }),
-                _high_is_one: !config.inverse_voltage,
+                high_is_one: config.inverse_voltage,
             });
 
             return Ok(result);
@@ -181,20 +182,27 @@ enum _WriterPhase
 {
     Idle,
     StartBit(u8),
-    Bit(u8),
+    Bit0(u8),
+    Bit1(u8),
+    Bit2(u8),
+    Bit3(u8),
+    Bit4(u8),
+    Bit5(u8),
+    Bit6(u8),
+    Bit7,
     EndBit,
     Err(WriteError),
 }
 
 struct _WriterState
 {
-    _pin: Pin<mode::Output, Dynamic>,
-    _buffer: &'static mut dyn SoftSerialWriterBufferOps,
-    _phase: _WriterPhase,
-    _scheduler: tc1::Scheduler,
-    _baudrate: u32,
-    _baud_cycles: u64,
-    _high_is_one: bool,
+    pub pin: Pin<mode::Output, Dynamic>,
+    pub buffer: &'static mut dyn SoftSerialWriterBufferOps,
+    pub last_phase: _WriterPhase,
+    pub scheduler: tc1::Scheduler,
+    pub baudrate: u32,
+    pub baud_cycles: u64,
+    pub high_is_one: bool,
 }
 
 impl _WriterState
@@ -204,95 +212,114 @@ impl _WriterState
         context: tc1::SchedulerTaskContext,
         process_state_task: fn(tc1::SchedulerTaskContext))
     {
-        match self._phase
+        match self.last_phase
         {
             _WriterPhase::Idle => (),
-            _WriterPhase::StartBit(buffer) =>
+            _WriterPhase::Err(_) => (),
+            _WriterPhase::StartBit(byte) =>
             {
-                self._set_pin((buffer & 0x1) != 0);
+                self._set_pin((byte & 1) != 0);
 
-                self._phase = _WriterPhase::Bit(buffer.unbounded_shr(1) | 0x80);
+                self.last_phase = _WriterPhase::Bit0(byte);
 
-                let Ok(()) = self._scheduler.schedule_task_absolute(
+                let Ok(()) = self.scheduler.schedule_task_absolute(
                     0xFF,
-                    context.cycles_since_init + self._baud_cycles,
+                    context.cycles_since_init + self.baud_cycles,
                     process_state_task)
                 else
                 {
-                    self._phase = _WriterPhase::Err(WriteError::TaskQueueFull);
+                    self.last_phase = _WriterPhase::Err(
+                        WriteError::TaskQueueFull);
                     return;
                 };
             },
-            _WriterPhase::Bit(buffer) =>
+            _WriterPhase::Bit0(byte)
+            | _WriterPhase::Bit1(byte)
+            | _WriterPhase::Bit2(byte)
+            | _WriterPhase::Bit3(byte)
+            | _WriterPhase::Bit4(byte)
+            | _WriterPhase::Bit5(byte)
+            | _WriterPhase::Bit6(byte) =>
             {
-                let next_buffer = buffer.unbounded_shr(1);
-
-                self._set_pin((buffer & 0x1) != 0);
-
-                if next_buffer == 0x1
+                let (mask, next_phase) = match self.last_phase
                 {
-                    self._phase = _WriterPhase::EndBit;
-
-                    let Ok(()) = self._scheduler.schedule_task_cycles(
-                        0xFF,
-                        self._baud_cycles,
-                        process_state_task)
-                    else
-                    {
-                        self._phase = _WriterPhase::Err(WriteError::TaskQueueFull);
-                        return;
-                    };
-                }
-                else
-                {
-                    self._phase = _WriterPhase::Bit(next_buffer);
-
-                    let Ok(()) = self._scheduler.schedule_task_absolute(
-                        0xFF,
-                        context.cycles_since_init + self._baud_cycles,
-                        process_state_task)
-                    else
-                    {
-                        self._phase = _WriterPhase::Err(WriteError::TaskQueueFull);
-                        return;
-                    };
-                }
-            },
-            _WriterPhase::EndBit =>
-            {
-                let Some(byte) = self._buffer.pop_back()
-                else
-                {
-                    self._phase = _WriterPhase::Idle;
-
-                    self._set_pin(false);
-                    return
+                    _WriterPhase::Bit0(_) => (1 << 1, _WriterPhase::Bit1(byte)),
+                    _WriterPhase::Bit1(_) => (1 << 2, _WriterPhase::Bit2(byte)),
+                    _WriterPhase::Bit2(_) => (1 << 3, _WriterPhase::Bit3(byte)),
+                    _WriterPhase::Bit3(_) => (1 << 4, _WriterPhase::Bit4(byte)),
+                    _WriterPhase::Bit4(_) => (1 << 5, _WriterPhase::Bit5(byte)),
+                    _WriterPhase::Bit5(_) => (1 << 6, _WriterPhase::Bit6(byte)),
+                    _WriterPhase::Bit6(_) => (1 << 7, _WriterPhase::Bit7),
+                    _ => unreachable_payload!(),
                 };
 
+                self._set_pin((byte & mask) != 0);
+
+                self.last_phase = next_phase;
+
+                let Ok(()) = self.scheduler.schedule_task_absolute(
+                    0xFF,
+                    context.cycles_since_init + self.baud_cycles,
+                    process_state_task)
+                else
+                {
+                    self.last_phase = _WriterPhase::Err(
+                        WriteError::TaskQueueFull);
+                    return;
+                };
+            },
+            _WriterPhase::Bit7 =>
+            {
                 self._set_pin(true);
 
-                self._phase = _WriterPhase::StartBit(byte);
+                self.last_phase = _WriterPhase::EndBit;
 
-                let Ok(()) = self._scheduler.schedule_task_absolute(
+                let Ok(()) = self.scheduler.schedule_task_absolute(
                     0xFF,
-                    context.cycles_since_init + self._baud_cycles,
+                    context.cycles_since_init + self.baud_cycles,
                     process_state_task)
                 else
                 {
-                    self._phase = _WriterPhase::Err(WriteError::TaskQueueFull);
+                    self.last_phase = _WriterPhase::Err(
+                        WriteError::TaskQueueFull);
                     return;
                 };
             },
-            _WriterPhase::Err(_) => (),
+            _WriterPhase::EndBit => match self.buffer.pop_back()
+            {
+                Some(next_byte) =>
+                {
+                    self._set_pin(true);
+
+                    self.last_phase = _WriterPhase::StartBit(next_byte);
+
+                    let Ok(()) = self.scheduler.schedule_task_absolute(
+                        0xFF,
+                        context.cycles_since_init + self.baud_cycles,
+                        process_state_task)
+                    else
+                    {
+                        self.last_phase = _WriterPhase::Err(
+                            WriteError::TaskQueueFull);
+                        return;
+                    };
+                },
+                None =>
+                {
+                    self._set_pin(false);
+
+                    self.last_phase = _WriterPhase::Idle;
+                },
+            },
         }
     }
 
     fn _set_pin(&mut self, one: bool)
     {
-        if one == self._high_is_one
-        { self._pin.set_low() }
+        if one == self.high_is_one
+        { self.pin.set_high() }
         else
-        { self._pin.set_high() }
+        { self.pin.set_low() }
     }
 }
 

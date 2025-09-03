@@ -1,10 +1,12 @@
 use core::ops::{Index, IndexMut};
 
-use super::{PinPortID, SchedulerTaskContext};
+use super::{PinEdge, PinPortID, SchedulerTaskContext};
 
 pub struct SchedulerAllocation<const TASK_CAPACITY: usize>
 {
-    _tasks: heapless::Vec<(PinPortID, fn(SchedulerTaskContext)), TASK_CAPACITY>,
+    _tasks: heapless::Vec<
+        (PinPortID, PinEdge, fn(SchedulerTaskContext)),
+        TASK_CAPACITY>,
 }
 
 impl<const TASK_CAPACITY: usize> SchedulerAllocation<TASK_CAPACITY>
@@ -23,22 +25,26 @@ impl<const TASK_CAPACITY: usize> Default for SchedulerAllocation<TASK_CAPACITY>
 }
 
 pub trait SchedulerAllocationOps
-    : IndexMut<usize, Output = (PinPortID, fn(SchedulerTaskContext))>
+    : IndexMut<usize, Output = (PinPortID, PinEdge, fn(SchedulerTaskContext))>
 {
     fn can_schedule_task(&self) -> bool;
 
-    fn schedule_task(&mut self, pin: PinPortID, task: fn(SchedulerTaskContext))
-        -> Result<(), ()>;
+    fn push_task(
+        &mut self,
+        pin: PinPortID,
+        edge: PinEdge,
+        task: fn(SchedulerTaskContext)) -> Result<(), ()>;
 
     fn len(&self) -> usize;
 
-    fn remove(&mut self, index: usize) -> (PinPortID, fn(SchedulerTaskContext));
+    fn remove(&mut self, index: usize)
+        -> (PinPortID, PinEdge, fn(SchedulerTaskContext));
 }
 
 impl<const TASK_CAPACITY: usize>
     Index<usize> for SchedulerAllocation<TASK_CAPACITY>
 {
-    type Output = (PinPortID, fn(SchedulerTaskContext));
+    type Output = (PinPortID, PinEdge, fn(SchedulerTaskContext));
 
     fn index(&self, index: usize) -> &Self::Output
     {
@@ -63,16 +69,20 @@ impl<const TASK_CAPACITY: usize>
         self._tasks.len() != self._tasks.capacity()
     }
 
-    fn schedule_task(&mut self, pin: PinPortID, task: fn(SchedulerTaskContext))
-        -> Result<(), ()>
+    fn push_task(
+        &mut self,
+        pin: PinPortID,
+        edge: PinEdge,
+        task: fn(SchedulerTaskContext)) -> Result<(), ()>
     {
-        self._tasks.push((pin, task)).map_err(|_| ())
+        self._tasks.push((pin, edge, task)).map_err(|_| ())
     }
 
     fn len(&self) -> usize { self.len() }
 
-    fn remove(&mut self, index: usize) -> (PinPortID, fn(SchedulerTaskContext))
+    fn remove(&mut self, index: usize)
+        -> (PinPortID, PinEdge, fn(SchedulerTaskContext))
     {
-        self._tasks.remove(index)
+        self._tasks.swap_remove(index)
     }
 }

@@ -37,6 +37,8 @@ impl Scheduler
             {
                 None =>
                 {
+                    interrupt::disable();
+
                     config.tc.tcnt1.write(|w| w.bits(0));
                     config.tc.tccr1a.write(|w| w
                         .wgm1().bits(0b__00));
@@ -163,10 +165,7 @@ impl Scheduler
                     str: b"TC1 Scheduler was initiated in an illegal way.");
             };
 
-            scheduler.allocation.schedule_task_absolute(
-                priority,
-                cycles_after_init,
-                task)?;
+            scheduler.allocation.push_task(priority, cycles_after_init, task)?;
 
             match cycles_after_init.checked_sub(scheduler.cycle_counter)
             {
@@ -206,21 +205,6 @@ impl Scheduler
             }
 
             Ok(())
-        })
-    }
-
-    pub unsafe fn internal_counter(&self) -> u64
-    {
-        interrupt::free(|_| unsafe
-        {
-            let Some(scheduler) = &mut _SCHEDULER
-            else
-            {
-                panic_payload!(
-                    str: b"TC1 Scheduler was initiated in an illegal way.");
-            };
-
-            scheduler.cycle_counter + scheduler.tc.tcnt1.read().bits() as u64
         })
     }
 }

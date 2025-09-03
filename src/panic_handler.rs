@@ -8,12 +8,14 @@ macro_rules! panic_payload
 {
     ($($type:ident$( as $generic:ident)?: $value:expr),*) =>
     {
-        #[allow(unused_unsafe)]
-        unsafe
         {
-            $crate::interrupt::disable();
-            $($crate::panic_setup_payload!($type$( as $generic)?: $value);)*
-            panic!();
+            #[allow(unused_unsafe)]
+            unsafe
+            {
+                $crate::interrupt::disable();
+                $($crate::panic_setup_payload!($type$( as $generic)?: $value);)*
+                panic!();
+            }
         }
     };
 }
@@ -269,6 +271,7 @@ unsafe fn panic(_: &core::panic::PanicInfo) -> !
     {
         for byte in b"!Panic \""
         { serial.write_byte(*byte) }
+
         for byte in _PAYLOAD.iter().flat_map(|x| x.iter())
         {
             match *byte
@@ -279,6 +282,7 @@ unsafe fn panic(_: &core::panic::PanicInfo) -> !
 
             serial.write_byte(*byte);
         }
+
         for byte in b"\"\n"
         { serial.write_byte(*byte) }
     }
@@ -288,6 +292,8 @@ unsafe fn panic(_: &core::panic::PanicInfo) -> !
 
     delay_ms(1000);
 
+    dp.CPU.mcusr.write(|w| w
+        .wdrf().set_bit());
     dp.WDT.wdtcsr.write(|w| w
         .wde().set_bit()
         .wdph().variant(false)

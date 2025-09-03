@@ -29,7 +29,7 @@ pub trait SchedulerAllocationOps
 {
     fn can_schedule_task(&self) -> bool;
 
-    fn schedule_task_absolute(
+    fn push_task(
         &mut self,
         priority: u8,
         cycles_after_init: u64,
@@ -49,7 +49,7 @@ impl<const TASK_CAPACITY: usize>
         self._tasks.len() != self._tasks.capacity()
     }
 
-    fn schedule_task_absolute(
+    fn push_task(
         &mut self,
         priority: u8,
         cycles_after_init: u64,
