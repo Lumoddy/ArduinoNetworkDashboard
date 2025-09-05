@@ -454,7 +454,14 @@ fn _read_pin_now_task(context: exint::SchedulerTaskContext)
 
                     let Ok(()) = reader.tc1.schedule_task_cycles(
                         0xFF,
-                        reader.baud_cycles / 2,
+                        (reader.baud_cycles / 2) - match tc1::PRESCALER
+                        {
+                            Prescaler::Direct => todo!(),
+                            Prescaler::Prescale8 => 80,
+                            Prescaler::Prescale64 => todo!(),
+                            Prescaler::Prescale256 => todo!(),
+                            Prescaler::Prescale1024 => todo!(),
+                        },
                         *process_state_task)
                     else
                     {

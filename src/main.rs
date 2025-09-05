@@ -5,30 +5,13 @@
 
 // mod coder
 mod panic_handler;
-mod soft;
-mod format;
-
-use core::{convert::Infallible, mem};
+mod soft_serial;
 
 use arduino_hal::{delay_ms, prelude::_unwrap_infallible_UnwrapInfallible};
-use avr_device::interrupt;
-use heapless::Vec;
-use soft::writer::WriterConfig;
-use soft::{exint, reader, writer};
-
-use soft::tc1;
-
-// use crate::software_serial2::{IntoSoftSerialReaderPin, IntoSoftSerialWriterPin};
-// use software_serial2::*;
-
-static mut TC1_SCHEDULER_ALLOCATION: tc1::SchedulerAllocation<16>
-    = tc1::SchedulerAllocation::new();
-
-static mut EXINT_SCHEDULER_ALLOCATION: exint::SchedulerAllocation<16>
-    = exint::SchedulerAllocation::new();
-
-static mut READER_BUFFER: heapless::Deque<u8, 64> = heapless::Deque::new();
-static mut WRITER_BUFFER: heapless::Deque<u8, 64> = heapless::Deque::new();
+use panic_handler::write_payload_and_panic;
+use soft_serial::input::{SerialInput, SerialInputConfig, SerialInputError};
+use soft_serial::output::{SerialOutput, SerialOutputConfig, SerialOutputError};
+use ufmt::uwrite;
 
 #[arduino_hal::entry]
 fn main() -> !
@@ -46,268 +29,129 @@ fn main() -> !
     {
         if r.borf().bit_is_set()
         {
-            for byte in b"!Reset caused by brown out.\n"
-            { serial.write_byte(*byte) }
+            uwrite!(serial, "!Reset caused by brown out.\n").unwrap_infallible();
 
             w.borf().clear_bit();
         }
         else if r.extrf().bit_is_set()
         {
-            for byte in b"!Reset caused by a manual reset.\n"
-            { serial.write_byte(*byte) }
+            uwrite!(serial, "!Reset caused by a manual reset.\n").unwrap_infallible();
 
             w.extrf().clear_bit();
         }
         else if r.porf().bit_is_set()
         {
-            for byte in b"!Start caused by power on.\n"
-            { serial.write_byte(*byte) }
+            uwrite!(serial, "!Start caused by power on.\n").unwrap_infallible();
 
             w.porf().clear_bit();
         }
         else if r.wdrf().bit_is_set()
         {
-            for byte in b"!Reset caused by watchdog.\n"
-            { serial.write_byte(*byte) }
+            uwrite!(serial, "!Reset caused by watchdog.\n").unwrap_infallible();
 
             w.wdrf().clear_bit();
         }
         else
         {
-            for byte in b"!Started for the first time.\n"
-            { serial.write_byte(*byte) }
+            uwrite!(serial, "!Started for the first time.\n").unwrap_infallible();
         }
 
         w
     });
 
-    for byte in b"!Initializing Tests...\n"
-    { serial.write_byte(*byte) }
+    uwrite!(serial, "!Initializing Tests...\n").unwrap_infallible();
 
-    let Ok(tc1_scheduler) = tc1::Scheduler::init(tc1::SchedulerConfig
+    soft_serial::init_service(dp.TC1, dp.EXINT);
+
+    let Ok(mut serial_input) = SerialInput::init(SerialInputConfig
     {
-        tc: dp.TC1,
-        allocation: unsafe { &mut TC1_SCHEDULER_ALLOCATION },
+        pin: pins.d12.into_pull_up_input(),
+        baudrate: 50,
+        inverse_signal: false,
     })
     else { unreachable_payload!() };
 
-    let Ok(exint_scheduler) = exint::Scheduler::init(exint::SchedulerConfig
+    let Ok(mut serial_output) = SerialOutput::init(SerialOutputConfig
     {
-        exint: dp.EXINT,
-        allocation: unsafe { &mut EXINT_SCHEDULER_ALLOCATION },
+        pin: pins.d13.into_output_high(),
+        baudrate: 50,
+        inverse_signal: false,
     })
     else { unreachable_payload!() };
 
-    for byte in b"!Starting Tests...\n"
-    { serial.write_byte(*byte) }
+    uwrite!(serial, "!Starting Tests...\n").unwrap_infallible();
 
-    let Ok(mut serial_writer) = soft::writer::init(
-        pins.d13.into_output(),
-        soft::writer::WriterConfig
-        {
-            baudrate: 2,
-            tc1: &tc1_scheduler,
-            buffer: unsafe { &mut WRITER_BUFFER },
-            inverse_voltage: false,
-        })
-    else { panic_payload!(str: b"Failed to init serial writer") };
-
-    let Ok(mut serial_reader) = soft::reader::init(
-        pins.d12.into_pull_up_input(),
-        soft::reader::ReaderConfig
-        {
-            baudrate: 2,
-            tc1: &tc1_scheduler,
-            exint: &exint_scheduler,
-            buffer: unsafe { &mut READER_BUFFER },
-            inverse_voltage: false,
-        })
-    else { panic_payload!(str: b"Failed to init serial writer") };
+    delay_ms(2000);
 
     loop
     {
-        for byte in b"! ->\n"
-        { serial.write_byte(*byte) }
-
-        interrupt::free(|_| unsafe
-        {
-            // for byte in b"This has been sent through the soft serial writer.\n"
-            for byte in b"5"
-            {
-                let Ok(()) = WRITER_BUFFER.push_front(*byte)
-                else { break };
-            }
-        });
-
-        match serial_writer.start_write_now()
-        {
-            Ok(()) => (),
-            Err(writer::WriteError::AlreadyWriting) =>
-            {
-                panic_payload!(str: b"WriteError::AlreadyWriting");
-            },
-            Err(writer::WriteError::NothingToWrite) =>
-            {
-                panic_payload!(str: b"WriteError::NothingToWrite");
-            },
-            Err(writer::WriteError::TaskQueueFull) =>
-            {
-                panic_payload!(str: b"WriteError::TaskQueueFull");
-            },
-        }
-
-        for byte in b"Read: \""
-        { serial.write_byte(*byte) }
-
-        while serial_writer.is_writing() || serial_reader.is_reading()
-        {
-            if let Some(byte) = interrupt::free(
-                |_| unsafe { READER_BUFFER.pop_back() })
-            {
-                serial.write_byte(byte);
-            }
-
-            delay_ms(10);
-        }
-
-        for byte in b"\"\n"
-        { serial.write_byte(*byte) }
-
-        delay_ms(1000);
-
-        match serial_reader.err()
-        {
-            Some(reader::ReadError::AlreadyWriting) =>
-            {
-                panic_payload!(str: b"ReadError::AlreadyWriting");
-            },
-            Some(reader::ReadError::BufferFull) =>
-            {
-                panic_payload!(str: b"ReadError::BufferFull");
-            },
-            Some(reader::ReadError::TaskQueueFull) =>
-            {
-                panic_payload!(str: b"ReadError::TaskQueueFull");
-            },
-            None => (),
-        }
-
-        // if serial_reader.is_reading()
-        // {
-        //     panic_payload!(str: b"IsReading");
-        // }
-
-        interrupt::free(|_| unsafe
-        {
-            for byte in b"Excess: \""
-            { serial.write_byte(*byte) }
-
-            while let Some(byte) = READER_BUFFER.pop_back()
-            { serial.write_byte(byte) }
-
-            for byte in b"\"\n"
-            { serial.write_byte(*byte) }
-        });
-
         avr_device::asm::wdr();
 
-        delay_ms(1000);
+        uwrite!(serial, "! {{\n").unwrap_infallible();
+
+        match uwrite!(serial_output, "5")
+        {
+            Ok(()) => (),
+            Err(SerialOutputError::TooManyParallel) =>
+            {
+                write_payload_and_panic(|w|
+                {
+                    uwrite!(w, "SerialInputError::TooManyParallel")?;
+
+                    Ok(())
+                });
+            },
+        }
+
+        match serial_input.take_err()
+        {
+            Some(SerialInputError::TooManyParallel) =>
+            {
+                write_payload_and_panic(|w|
+                {
+                    uwrite!(w, "SerialInputError::TooManyParallel: \"")?;
+
+                    for byte in serial_input.continuous_read()
+                    {
+                        w.write_byte(byte);
+                    }
+
+                    uwrite!(w, "\"\n")?;
+
+                    Ok(())
+                });
+            },
+            Some(SerialInputError::IncompleteData) =>
+            {
+                write_payload_and_panic(|w|
+                {
+                    uwrite!(w, "SerialInputError::IncompleteData: \"")?;
+
+                    for byte in serial_input.continuous_read()
+                    {
+                        w.write_byte(byte);
+                    }
+
+                    uwrite!(w, "\"\n")?;
+
+                    Ok(())
+                });
+            },
+            None =>
+            {
+                uwrite!(serial, "Read: \"").unwrap_infallible();
+
+                for byte in serial_input.continuous_read()
+                {
+                    serial.write_byte(byte);
+                }
+
+                uwrite!(serial, "\"\n").unwrap_infallible();
+            }
+        }
+
+        uwrite!(serial, "! }}\n").unwrap_infallible();
+
+        delay_ms(2000);
     }
 }
-
-// #[avr_device::interrupt(atmega328p)]
-// unsafe fn TIMER1_OVF()
-// {
-//     PRINT.push(b'V').unwrap();
-// }
-
-// #[avr_device::interrupt(atmega328p)]
-// unsafe fn TIMER1_COMPA()
-// {
-//     PRINT.push(b'C').unwrap();
-// }
-
-        // dp.TC1.tccr1b.modify(|r, w| w.cs1().variant());
-
-    // for byte in b"starting...\n"
-    // {
-    //     serial.write_byte(*byte);
-    // }
-
-    // software_serial2::init().unwrap();
-
-    // let Ok(mut serial_writer) = pins.d13.into_soft_serial_writer(2) else
-    // { unreachable!() };
-
-    // let Ok(serial_reader) = pins.d12.into_soft_serial_reader(2) else
-    // { unreachable!() };
-
-    // for byte in b"started...\n"
-    // {
-    //     serial.write_byte(*byte);
-    // }
-
-    // dp.EXINT.pcmsk0.write(|w| w.pcint().bits(0b00000001));
-    // dp.EXINT.pcicr.write(|w| w.pcie().bits(0b111));
-    // dp.EXINT.eicra.write(|w| w.isc0().bits(0b11));
-
-    // dp.TC1.timsk1.write(|w| w.ocie1a().set_bit());
-    // dp.TC1.tccr1a.write(|w| w.wgm1().bits(0b00));
-    // dp.TC1.tccr1b.write(|w| w.wgm1().bits(0b01).cs1().bits(0b100));
-    // dp.TC1.ocr1a.write(|w| w.bits(60000));
-
-    // unsafe
-    // {
-    //     avr_device::interrupt::enable();
-    //     led_pin = Some(pins.d13.into_output().downgrade());
-    //     tcor = Some(&dp.TC1.ocr1a);
-    // }
-
-    // let _ = pins.d8.into_pull_up_input();
-
-    // loop
-    // {
-    //     for byte in b"writing...\n"
-    //     {
-    //         serial.write_byte(*byte);
-    //     }
-
-    //     loop { }
-
-    //     serial_writer.write(0b00110100).unwrap();
-    //     delay_ms(5000);
-
-    //     for byte in b"reading...\n"
-    //     {
-    //         serial.write_byte(*byte);
-    //     }
-
-    //     delay_ms(1000);
-    //     let mut led_pin = serial_writer.into_pin();
-    //     if serial_reader.read().is_ok()
-    //     {
-    //         for byte in b"good\n"
-    //         {
-    //             serial.write_byte(*byte);
-    //         }
-
-    //         led_pin.set_high();
-    //         delay_ms(100);
-    //         led_pin.set_low();
-    //     }
-    //     else
-    //     {
-    //         for byte in b"bad\n"
-    //         {
-    //             serial.write_byte(*byte);
-    //         }
-    //     }
-    //     delay_ms(1000);
-
-    //     if let Ok(new_serial_writer) = led_pin.into_soft_serial_writer(2)
-    //     {
-    //         serial_writer = new_serial_writer;
-    //     }
-    //     else
-    //     { unreachable!() };
-    // }
