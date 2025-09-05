@@ -436,7 +436,7 @@ import { GraphElement } from "./graph-element.js";
 
     /**
     @param {GraphElement} node
-    
+
     @returns {GraphElement}
     @public*/ appendGraphElement(node)
     {
