@@ -1,8 +1,11 @@
+/**
+@import * as SerialMessage from "./serial-message.js"
+*/
 
 /**
-@template {SerialMessageEncodingFormat} const F
+@template {SerialMessage.EncodingFormat} const F
 @param {F} format
-@param {SerialMessageEncodingValueOf<F>} value
+@param {SerialMessage.EncodingValueOf<F>} value
 @returns {Uint8Array}
 */ export function encode(format, value)
 {
@@ -14,9 +17,9 @@
 }
 
 /**
-@template {SerialMessageEncodingFormat} const F
+@template {SerialMessage.EncodingFormat} const F
 @param {F} format
-@returns {(value: SerialMessageEncodingValueOf<F>) => Uint8Array}
+@returns {(value: SerialMessage.EncodingValueOf<F>) => Uint8Array}
 */ export function createEncoder(format)
 {
     const callback = _encodeCallback(format);
@@ -31,9 +34,9 @@
 }
 
 /**
-@template {SerialMessageEncodingFormat} const F
+@template {SerialMessage.EncodingFormat} const F
 @param {F} format
-@returns {SerialMessageEncodingCallback<SerialMessageEncodingValueOf<F>>}
+@returns {SerialMessage.EncodingCallback<SerialMessage.EncodingValueOf<F>>}
 */ function _encodeCallback(format)
 {
     if (format instanceof Function)
@@ -60,7 +63,7 @@
         case "u16":
             return function* (value)
             { // @ts-ignore
-                const masked = value & 0xFFFF;
+                const masked = Number(value) & 0xFFFF;
                 for (let shift = 0; shift < 16; shift += 8)
                     yield (masked >> shift) & 0xFF;
             }
@@ -73,7 +76,7 @@
         case "u32":
             return function* (value)
             { // @ts-ignore
-                const masked = value & 0xFFFFFFFF;
+                const masked = Number(value) & 0xFFFFFFFF;
                 for (let shift = 0; shift < 32; shift += 8)
                     yield (masked >> shift) & 0xFF;
             }
@@ -88,7 +91,7 @@
         case "u64":
             return function* (value)
             { // @ts-ignore
-                const masked = value & 0xFFFFFFFFFFFFFFFFn;
+                const masked = BigInt(value) & 0xFFFFFFFFFFFFFFFFn;
                 for (let shift = 0n; shift < 64n; shift += 8n)
                     yield Number((masked >> shift) & 0xFFn);
             }
@@ -144,7 +147,7 @@
                 // @ts-ignore
                 for (const element of value)
                 {
-                    const masked = element & 0xFFFF;
+                    const masked = Number(element) & 0xFFFF;
                     for (let shift = 0; shift < 16; shift += 8)
                         yield (masked >> shift) & 0xFF;
                 }
@@ -169,7 +172,7 @@
                 // @ts-ignore
                 for (const element of value)
                 {
-                    const masked = element & 0xFFFFFFFF;
+                    const masked = Number(element) & 0xFFFFFFFF;
                     for (let shift = 0; shift < 32; shift += 8)
                         yield (masked >> shift) & 0xFF;
                 }
@@ -196,7 +199,7 @@
                 // @ts-ignore
                 for (const element of value)
                 {
-                    const masked = element & 0xFFFFFFFFFFFFFFFFn;
+                    const masked = BigInt(element) & 0xFFFFFFFFFFFFFFFFn;
                     for (let shift = 0n; shift < 64n; shift += 8n)
                         yield Number((masked >> shift) & 0xFFn);
                 }
@@ -330,14 +333,14 @@
 }
 
 /**
-@template {SerialMessageDecodingFormat} const F
+@template {SerialMessage.DecodingFormat} const F
 @param {F} format
-@param {ArrayLike<number> | Iterator<number> | (() => IteratorResult<Byte>)} value
-@returns {SerialMessageDecodingValueOf<F>}
+@param {ArrayLike<number> | Iterable<number> | Iterator<number> | (() => IteratorResult<number>)} value
+@returns {SerialMessage.DecodingValueOf<F>}
 */ export function decode(format, value)
 {
-    if (Symbol.iterator in value) // @ts-ignore
-        value = value[Symbol.iterator];
+    if (Symbol.iterator in value)
+        value = value[Symbol.iterator]();
 
     if ("length" in value && !(value instanceof Function))
     {
@@ -352,15 +355,15 @@
         };
     }
     else if ("next" in value)
-        value = value.next;
+        value = /** @type {typeof value.next} */(value.next.bind(value));
 
     return _decodeCallback(format)(value);
 }
 
 /**
-@template {SerialMessageDecodingFormat} const F
+@template {SerialMessage.DecodingFormat} const F
 @param {F} format
-@returns {(encoded: Uint8Array) => SerialMessageDecodingValueOf<F>}
+@returns {(encoded: Uint8Array) => SerialMessage.DecodingValueOf<F>}
 */ export function createDecoder(format)
 {
     const callback = _decodeCallback(format);
@@ -378,9 +381,9 @@
 }
 
 /**
-@template {SerialMessageDecodingFormat} const F
+@template {SerialMessage.DecodingFormat} const F
 @param {F} format
-@returns {SerialMessageDecodingCallback<SerialMessageDecodingValueOf<F>>}
+@returns {SerialMessage.DecodingCallback<SerialMessage.DecodingValueOf<F>>}
 */ function _decodeCallback(format)
 {
     if (format instanceof Function)
@@ -803,8 +806,8 @@
                 const elementFormats = formatContents.map(_decodeCallback); // @ts-ignore
                 return (nextByte) =>
                 {
-                    const result = new Array(format.length - 1);
-                    for (let i = 1; i < format.length; i++) // @ts-ignore
+                    const result = new Array(elementFormats.length - 1);
+                    for (let i = 0; i < elementFormats.length; i++)
                         result[i] = elementFormats[i](nextByte);
 
                     return result;
@@ -816,10 +819,11 @@
             case "struct":
             case "{}":
             {
-                const elementFormats = /** @type {{ [K in string]: SerialMessageDecodingCallback<any> }} */({});
-                for (let i = 1; i < format.length; i++)
+                const [_, ...formatContents] = format;
+                const elementFormats = /** @type {{ [K in string]: SerialMessage.DecodingCallback<any> }} */({});
+                for (let i = 0; i < formatContents.length; i++)
                 {
-                    const [key, value] = format[i]; // @ts-ignore
+                    const [key, value] = formatContents[i]; // @ts-ignore
                     elementFormats[key] = _decodeCallback(value);
                 }
                 // @ts-ignore
