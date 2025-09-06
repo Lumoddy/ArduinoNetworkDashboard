@@ -13,7 +13,7 @@ macro_rules! panic_payload
     ($($args:expr),+) =>
     {
         {
-            $crate::write_payload_and_panic(|w| ufmt::uwrite!(w, $($args),+));
+            $crate::panic_handler::write_payload_and_panic(|w| ufmt::uwrite!(w, $($args),+));
         }
     };
 }
