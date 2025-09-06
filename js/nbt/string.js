@@ -1,4 +1,4 @@
-import { Tag } from "./index.js";
+import { Tag } from "./base.js";
 
 /**
  * A {@linkcode Tag} that stores a string (`UTF-8`).

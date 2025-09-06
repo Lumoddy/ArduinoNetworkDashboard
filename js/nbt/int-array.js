@@ -1,4 +1,4 @@
-import { Tag } from "./index.js";
+import { Tag } from "./base.js";
 
 /**
  * A {@linkcode Tag} that stores a byte array (`Int32Array`).

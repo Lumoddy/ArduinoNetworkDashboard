@@ -1,5 +1,6 @@
 export * from "./list/index.js";
 
+export * from "./list/base.js";
 export * from "./list/byte.js";
 export * from "./list/short.js";
 export * from "./list/int.js";

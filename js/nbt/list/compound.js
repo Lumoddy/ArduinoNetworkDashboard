@@ -1,5 +1,5 @@
 import { CompoundTag } from "../compound.js";
-import { ListTag } from "./index.js";
+import { ListTag } from "./base.js";
 
 /**
  * A {@linkcode TagList} that stores compounds (`Map<string, Tag>[]`).
