@@ -9,9 +9,8 @@ mod common;
 
 use core::convert::Infallible;
 
-use common::serialize::{Serialize, SerializeResult};
-use nbt::{CompoundContentWriter, CompoundNameWriter, NamedTagListWriter, Serializer, SimpleValueNameWriter, SimpleValueWriter};
-use ufmt::uwrite;
+use common::serialize::Serialize;
+use nbt::{CompoundSerializerWrite, CompoundSerializerWriteName, PrimitiveListSerializerWrite, PrimitiveListSerializerWriteName, PrimitiveSerializerWrite as _, PrimitiveSerializerWriteName as _, Serializer, TypePickerSerializerWrite};
 
 #[arduino_hal::entry]
 fn main() -> !
@@ -36,17 +35,24 @@ struct Test
 
 }
 
-impl nbt::SerializeAsTag for Test
+impl nbt::SerializeAsCompoundTag for Test
 {
     type Error = Infallible;
 
-    fn serialize<W: nbt::NamedTagListWriter>(self, writer: W)
-        -> Result<Result<W::Return, Infallible>, W::Error>
+    fn serialize<W: nbt::CompoundSerializerWrite>(self, writer: W)
+        -> Result<Result<W::Parent, Infallible>, W::Error>
     {
-        Ok(Ok(writer
-            .begin_compound()?.name("")?
-                .int()?.name("A")?.value(1)?
-                .byte()?.name("B")?.value(8)?
-                .end_compound()?))
+        let a = writer
+            .compound()?.name("")?
+                .byte()?.name("byte")?.value(5)?
+                .string()?.name("name")?.value("something")?
+                .byte()?.name("")?.value(1)?
+                .compound()?.name("group")?
+                    .byte_array()?.name("blob")?.of(&[1, 2, 3, 4])?
+                    .end()?
+                .end()?
+            .end()?;
+
+        Ok(Ok(a))
     }
 }

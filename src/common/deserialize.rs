@@ -1,11 +1,11 @@
+use core::convert::Infallible;
 
 #[must_use]
-pub enum DeserializeResult<Output, Word, Error>
+pub enum DeserializeResult<Output, SinkError, SerializeError>
 {
-    Ok,
-    Done(Output),
-    Full(Word),
-    Err(Error, Word),
+    Ok(Output),
+    SinkErr(SinkError),
+    SerializeErr(SerializeError),
 }
 
 pub trait Deserialize
@@ -14,6 +14,10 @@ pub trait Deserialize
     type Word;
     type Error;
 
-    fn push(&mut self, word: Self::Word)
-        -> DeserializeResult<Self::Output, Self::Word, Self::Error>;
+    fn sink<
+        F: FnMut() -> Result<Self::Word, E>,
+        E>(self, f: F) -> DeserializeResult<Self::Output, E, Self::Error>;
+
+    fn sink_infallible<F: FnMut(u8)>(self, f: F)
+        -> DeserializeResult<Self::Output, Infallible, Self::Error>;
 }
