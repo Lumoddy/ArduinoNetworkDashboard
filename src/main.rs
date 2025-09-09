@@ -1,7 +1,8 @@
 #![no_std]
 #![no_main]
-#![feature(abi_avr_interrupt)]
 #![allow(static_mut_refs)]
+#![feature(abi_avr_interrupt)]
+#![feature(impl_trait_in_assoc_type)]
 
 mod panic_handler;
 mod nbt;
@@ -9,8 +10,11 @@ mod common;
 
 use core::convert::Infallible;
 
-use common::serialize::Serialize;
-use nbt::{CompoundSerializerWrite, CompoundSerializerWriteName, PrimitiveListSerializerWrite, PrimitiveListSerializerWriteName, PrimitiveSerializerWrite as _, PrimitiveSerializerWriteName as _, Serializer, TypePickerSerializerWrite};
+use arduino_hal::delay_ms;
+use arduino_hal::prelude::_unwrap_infallible_UnwrapInfallible;
+use nbt::writer::{WriteCompound, WriteCompoundName, WriteInt, WriteIntName, WriteString, WriteStringName};
+use panic_handler::UnwrapPayload;
+use ufmt::uwrite;
 
 #[arduino_hal::entry]
 fn main() -> !
@@ -24,35 +28,68 @@ fn main() -> !
         pins.d1.into_output(),
         arduino_hal::hal::usart::BaudrateArduinoExt::into_baudrate(9600));
 
-    let a = Serializer::new(Test { }, nbt::Endian::Little);
-    _ = a.drain_infallible(|byte| serial.write_byte(byte));
+    delay_ms(1000);
+
+    uwrite!(serial, "NBT: [\n").unwrap_payload();
+
+    let mut writer = nbt::writer::ClosureWriter::new(
+        nbt::writer::Endian::Little,
+        |byte| Ok::<_, Infallible>(
+        {
+            if (b'a'..=b'z').contains(&byte)
+            {
+                serial.write_byte(b'\'');
+                serial.write_byte(byte);
+                serial.write_byte(b' ');
+            }
+            else
+            {
+                uwrite!(serial, "{:02X} ", byte)?;
+            }
+        }));
+
+    writer = || -> Result<_, _>
+    {
+        writer
+            .compound()?.name("")?
+                .string()?.name("type")?.write("test")?
+                .int()?.name("value")?.write(420)?
+                .end()
+    }()
+    .unwrap_payload();
+
+    drop(writer);
+
+    uwrite!(serial, "\n]\n").unwrap_payload();
+
+    // nbt::serialize_byte_array_be::<Infallible>(&[6i8].as_slice(), |byte| Ok(serial.write_byte(byte))).unwrap_infallible();
 
     loop { }
 }
 
-struct Test
-{
+// struct Test
+// {
 
-}
+// }
 
-impl nbt::SerializeAsCompoundTag for Test
-{
-    type Error = Infallible;
+// impl<'a> nbt::SerializeAsByteArray<'a> for Test
+// {
+//     type Error = Infallible;
 
-    fn serialize<W: nbt::CompoundSerializerWrite>(self, writer: W)
-        -> Result<Result<W::Parent, Infallible>, W::Error>
-    {
-        let a = writer
-            .compound()?.name("")?
-                .byte()?.name("byte")?.value(5)?
-                .string()?.name("name")?.value("something")?
-                .byte()?.name("")?.value(1)?
-                .compound()?.name("group")?
-                    .byte_array()?.name("blob")?.of(&[1, 2, 3, 4])?
-                    .end()?
-                .end()?
-            .end()?;
+//     fn serialize<W: nbt::CompoundSerializerWrite>(self, writer: W)
+//         -> Result<Result<W::Parent, Infallible>, W::Error>
+//     {
+//         let a = writer
+//             .compound()?.name("")?
+//                 .byte()?.name("byte")?.value(5)?
+//                 .string()?.name("name")?.value("something")?
+//                 .byte()?.name("")?.value(1)?
+//                 .compound()?.name("group")?
+//                     .byte_array()?.name("blob")?.of(&[1, 2, 3, 4])?
+//                     .end()?
+//                 .end()?
+//             .end()?;
 
-        Ok(Ok(a))
-    }
-}
+//         Ok(Ok(a))
+//     }
+// }

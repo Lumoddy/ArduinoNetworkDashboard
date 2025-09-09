@@ -1,2 +1,6 @@
-pub mod serialize;
-pub mod deserialize;
+
+mod serialize;
+mod deserialize;
+
+pub use serialize::*;
+pub use deserialize::*;

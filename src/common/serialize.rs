@@ -1,11 +1,11 @@
-use core::convert::Infallible;
 
 #[must_use]
-pub enum SerializeResult<DrainError, SerializeError>
+pub enum SerializeResult<Word, Error>
 {
-    Ok,
-    DrainErr(DrainError),
-    SerializeErr(SerializeError),
+    Ok(Word),
+    Done(Word),
+    Empty,
+    Err(Error),
 }
 
 pub trait Serialize
@@ -13,10 +13,5 @@ pub trait Serialize
     type Word;
     type Error;
 
-    fn drain<
-        F: FnMut(Self::Word) -> Result<(), E>,
-        E>(self, f: F) -> SerializeResult<E, Self::Error>;
-
-    fn drain_infallible<F: FnMut(u8)>(self, f: F)
-        -> SerializeResult<Infallible, Self::Error>;
+    fn pop(&mut self) -> SerializeResult<Self::Word, Self::Error>;
 }

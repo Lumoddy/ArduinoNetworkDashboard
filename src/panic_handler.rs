@@ -70,6 +70,60 @@ impl uWrite for Payload
     }
 }
 
+pub trait ExpectPayload
+{
+    type Value;
+    type Error;
+
+    fn expect_payload(
+        self,
+        f: impl FnOnce(&mut Payload) -> Result<(), Infallible>) -> Self::Value;
+}
+
+impl<T, E> ExpectPayload for Result<T, E>
+{
+    type Value = T;
+    type Error = E;
+
+    fn expect_payload(
+        self,
+        f: impl FnOnce(&mut Payload) -> Result<(), Infallible>) -> T
+    {
+        match self
+        {
+            Self::Ok(value) => value,
+            Self::Err(_) => write_payload_and_panic(f),
+        }
+    }
+}
+
+pub trait UnwrapPayload
+{
+    type Value;
+    type Error;
+
+    fn unwrap_payload(self) -> Self::Value;
+}
+
+impl<T, E> UnwrapPayload for Result<T, E>
+{
+    type Value = T;
+    type Error = E;
+
+    fn unwrap_payload(self) -> T
+    {
+        match self
+        {
+            Self::Ok(value) => value,
+            Self::Err(_) => write_payload_and_panic(|w| uwrite!(
+                w,
+                "Unwrapped error at {}:{}",
+                file!(),
+                line!())),
+        }
+    }
+}
+
 static mut _PANIC_ALREADY_PRINTED: bool = false;
 
 pub fn write_payload_and_panic(
