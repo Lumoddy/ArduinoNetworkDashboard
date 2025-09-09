@@ -2,7 +2,6 @@
 #![no_main]
 #![allow(static_mut_refs)]
 #![feature(abi_avr_interrupt)]
-#![feature(impl_trait_in_assoc_type)]
 
 mod panic_handler;
 mod nbt;
@@ -10,9 +9,8 @@ mod common;
 
 use core::convert::Infallible;
 
-use arduino_hal::delay_ms;
-use arduino_hal::prelude::_unwrap_infallible_UnwrapInfallible;
-use nbt::writer::{WriteCompound, WriteCompoundName, WriteInt, WriteIntName, WriteString, WriteStringName};
+use arduino_hal::{delay_ms};
+use nbt::writer::{WriteCompound, WriteName, Write};
 use panic_handler::UnwrapPayload;
 use ufmt::uwrite;
 
@@ -32,8 +30,8 @@ fn main() -> !
 
     uwrite!(serial, "NBT: [\n").unwrap_payload();
 
-    let mut writer = nbt::writer::ClosureWriter::new(
-        nbt::writer::Endian::Little,
+    let mut raw_writer = nbt::writer::new(
+        nbt::Endian::Little,
         |byte| Ok::<_, Infallible>(
         {
             if (b'a'..=b'z').contains(&byte)
@@ -48,6 +46,8 @@ fn main() -> !
             }
         }));
 
+    let mut writer = raw_writer.safe();
+
     writer = || -> Result<_, _>
     {
         writer
@@ -61,6 +61,37 @@ fn main() -> !
     drop(writer);
 
     uwrite!(serial, "\n]\n").unwrap_payload();
+
+    // let mut reader = nbt::reader::ClosureReader::new(
+    //     nbt::Endian::Little,
+    //     |byte| Ok::<_, Infallible>(
+    //     {
+    //         if (b'a'..=b'z').contains(&byte)
+    //         {
+    //             serial.write_byte(b'\'');
+    //             serial.write_byte(byte);
+    //             serial.write_byte(b' ');
+    //         }
+    //         else
+    //         {
+    //             uwrite!(serial, "{:02X} ", byte)?;
+    //         }
+    //     }));
+
+    // reader = || -> Result<_, _>
+    // {
+    //     match reader.entry()
+    //     {
+    //         TypeVarant
+    //     }
+    //         .compound()?.name("")?
+    //             .string()?.name("type")?.write("test")?
+    //             .int()?.name("value")?.write(420)?
+    //             .end()
+    // }()
+    // .unwrap_payload();
+
+    // drop(reader);
 
     // nbt::serialize_byte_array_be::<Infallible>(&[6i8].as_slice(), |byte| Ok(serial.write_byte(byte))).unwrap_infallible();
 

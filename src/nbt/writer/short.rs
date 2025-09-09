@@ -1,70 +1,55 @@
 
 pub trait WriteShortName
-{
-    type Parent;
-    type Error;
-    type ValueWriter: WriteShort<Error = Self::Error, Parent = Self::Parent>;
-
-    fn name(self, name: &str) -> Result<Self::ValueWriter, Self::Error>;
-}
+    : super::ChildWrite
+    + super::WriteName<
+        Next: WriteShort<
+            Error = Self::Error,
+            Parent = Self::Parent>> { }
 
 pub trait WriteShort
-{
-    type Parent;
-    type Error;
-
-    fn write(self, short: i16) -> Result<Self::Parent, Self::Error>;
-
-    fn write_unsigned(self, short: u16) -> Result<Self::Parent, Self::Error>;
-}
+    : super::ChildWrite
+    + super::Write<
+        i16,
+        Next = Self::Parent>
+    + super::WriteUnsigned<
+        u16,
+        Next = Self::Parent> { }
 
 pub trait WriteShortListName
-{
-    type Parent;
-    type Error;
-    type ValueWriter: WriteShortList<Error = Self::Error, Parent = Self::Parent>;
-
-    fn name(self, name: &str) -> Result<Self::ValueWriter, Self::Error>;
-}
+    : super::ChildWrite
+    + super::WriteName<
+        Next: WriteShortList<
+            Error = Self::Error,
+            Parent = Self::Parent>> { }
 
 pub trait WriteShortList
-{
-    type Parent;
-    type Error;
+    : super::ChildWrite
+    + for<'a> super::Write<
+        &'a [i16],
+        Next = Self::Parent>
+    + for<'a> super::WriteUnsigned<
+        &'a [u16],
+        Next = Self::Parent>
+    + super::WriteLen<
+        ChildNext: WriteShortListContents<
+            Error = Self::Error,
+            Parent = Self::Parent>>
+    + super::WriteArray<
+        ChildWrite: WriteShort<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }
 
-    fn write(self, array: &[i16]) -> Result<Self::Parent, Self::Error>;
-
-    fn write_unsigned(self, array: &[u16]) -> Result<Self::Parent, Self::Error>;
-
-    type WriteContents: WriteShortListContents<
-        Error = Self::Error,
-        Parent = Self::Parent>;
-
-    fn length(self, length: u32) -> Result<Self::WriteContents, Self::Error>;
-}
-
-pub trait WriteShortListContents: Sized
-{
-    type Parent;
-    type Error;
-
-    type WriteElement: WriteShort<Error = Self::Error>;
-
-    fn map(
-        self,
-        f: impl FnMut(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteShort>::Parent,
-                <Self::WriteElement as WriteShort>::Error>)
-            -> Result<Self::Parent, Self::Error>;
-
-    fn end(self) -> Result<Result<Self::Parent, Self>, Self::Error>;
-
-    fn enter(
-        self,
-        f: impl FnOnce(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteShort>::Parent,
-                <Self::WriteElement as WriteShort>::Error>)
-        -> Result<Result<Self, Self>, Self::Error>;
-}
+pub trait WriteShortListContents
+    : super::ChildWrite
+    + super::WriteAppend<
+        i16,
+        Next = Self::Parent>
+    + super::WriteAppendUnsigned<
+        u16,
+        Next = Self::Parent>
+    + super::WriteExtend<
+        ChildWrite: WriteShort<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }

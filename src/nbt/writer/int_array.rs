@@ -1,103 +1,78 @@
-use super::WriteInt;
 
 pub trait WriteIntArrayName
-{
-    type Parent;
-    type Error;
-    type ValueWriter: WriteIntArray<Error = Self::Error, Parent = Self::Parent>;
-
-    fn name(self, name: &str) -> Result<Self::ValueWriter, Self::Error>;
-}
+    : super::ChildWrite
+    + super::WriteName<
+        Next: WriteIntArray<
+            Error = Self::Error,
+            Parent = Self::Parent>> { }
 
 pub trait WriteIntArray
-{
-    type Parent;
-    type Error;
+    : super::ChildWrite
+    + for<'a> super::Write<
+        &'a [i32],
+        Next = Self::Parent>
+    + for<'a> super::WriteUnsigned<
+        &'a [u32],
+        Next = Self::Parent>
+    + super::WriteLen<
+        ChildNext: WriteIntArrayContents<
+            Error = Self::Error,
+            Parent = Self::Parent>>
+    + super::WriteArray<
+        ChildWrite: super::WriteInt<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }
 
-    fn write(self, array: &[i32]) -> Result<Self::Parent, Self::Error>;
-
-    fn write_unsigned(self, array: &[u32]) -> Result<Self::Parent, Self::Error>;
-
-    type WriteContents: WriteIntArrayContents<
-        Error = Self::Error,
-        Parent = Self::Parent>;
-
-    fn length(self, length: u32) -> Result<Self::WriteContents, Self::Error>;
-}
-
-pub trait WriteIntArrayContents: Sized
-{
-    type Parent;
-    type Error;
-
-    type WriteElement: WriteInt<Error = Self::Error>;
-
-    fn map(
-        self,
-        f: impl FnMut(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteInt>::Parent,
-                <Self::WriteElement as WriteInt>::Error>)
-            -> Result<Self::Parent, Self::Error>;
-
-    fn end(self) -> Result<Result<Self::Parent, Self>, Self::Error>;
-
-    fn enter(
-        self,
-        f: impl FnOnce(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteInt>::Parent,
-                <Self::WriteElement as WriteInt>::Error>)
-        -> Result<Result<Self, Self>, Self::Error>;
-}
+pub trait WriteIntArrayContents
+    : super::ChildWrite
+    + super::WriteAppend<
+        i32,
+        Next = Self::Parent>
+    + super::WriteAppendUnsigned<
+        u32,
+        Next = Self::Parent>
+    + super::WriteExtend<
+        ChildWrite: super::WriteInt<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }
 
 pub trait WriteIntArrayListName
-{
-    type Parent;
-    type Error;
-    type ValueWriter: WriteIntArrayList<Error = Self::Error, Parent = Self::Parent>;
-
-    fn name(self, name: &str) -> Result<Self::ValueWriter, Self::Error>;
-}
+    : super::ChildWrite
+    + super::WriteName<
+        Next: WriteIntArrayList<
+            Error = Self::Error,
+            Parent = Self::Parent>> { }
 
 pub trait WriteIntArrayList
-{
-    type Parent;
-    type Error;
+    : super::ChildWrite
+    + for<'a> super::Write<
+        &'a [&'a [i32]],
+        Next = Self::Parent>
+    + for<'a> super::WriteUnsigned<
+        &'a [&'a [u32]],
+        Next = Self::Parent>
+    + super::WriteLen<
+        ChildNext: WriteIntArrayListContents<
+            Error = Self::Error,
+            Parent = Self::Parent>>
+    + super::WriteArray<
+        ChildWrite: WriteIntArray<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }
 
-    fn write(self, array: &[&[i32]]) -> Result<Self::Parent, Self::Error>;
-
-    fn write_unsigned(self, array: &[&[u32]]) -> Result<Self::Parent, Self::Error>;
-
-    type WriteContents: WriteIntArrayListContents<
-        Error = Self::Error,
-        Parent = Self::Parent>;
-
-    fn length(self, length: u32) -> Result<Self::WriteContents, Self::Error>;
-}
-
-pub trait WriteIntArrayListContents: Sized
-{
-    type Parent;
-    type Error;
-
-    type WriteElement: WriteIntArray<Error = Self::Error>;
-
-    fn map(
-        self,
-        f: impl FnMut(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteIntArray>::Parent,
-                <Self::WriteElement as WriteIntArray>::Error>)
-            -> Result<Self::Parent, Self::Error>;
-
-    fn end(self) -> Result<Result<Self::Parent, Self>, Self::Error>;
-
-    fn enter(
-        self,
-        f: impl FnOnce(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteIntArray>::Parent,
-                <Self::WriteElement as WriteIntArray>::Error>)
-        -> Result<Result<Self, Self>, Self::Error>;
-}
+pub trait WriteIntArrayListContents
+    : super::ChildWrite
+    + for<'a> super::WriteAppend<
+        &'a [i32],
+        Next = Self::Parent>
+    + for<'a> super::WriteAppendUnsigned<
+        &'a [u32],
+        Next = Self::Parent>
+    + super::WriteExtend<
+        ChildWrite: WriteIntArray<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }

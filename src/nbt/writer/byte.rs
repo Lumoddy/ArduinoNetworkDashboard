@@ -1,87 +1,68 @@
 
 pub trait WriteByteName
-{
-    type Parent;
-    type Error;
-    type ValueWriter: WriteByte<Error = Self::Error, Parent = Self::Parent>;
-
-    fn name(self, name: &str) -> Result<Self::ValueWriter, Self::Error>;
-}
+    : super::ChildWrite
+    + super::WriteName<
+        Next: WriteByte<
+            Error = Self::Error,
+            Parent = Self::Parent>> { }
 
 pub trait WriteByte
-{
-    type Parent;
-    type Error;
-
-    fn write(self, byte: i8) -> Result<Self::Parent, Self::Error>;
-
-    fn write_unsigned(self, byte: u8) -> Result<Self::Parent, Self::Error>;
-}
-
-pub trait WriteByteListName
-{
-    type Parent;
-    type Error;
-    type ValueWriter: WriteByteList<Error = Self::Error, Parent = Self::Parent>;
-
-    fn name(self, name: &str) -> Result<Self::ValueWriter, Self::Error>;
-}
-
-pub trait WriteByteList
-{
-    type Parent;
-    type Error;
-
-    fn write(self, array: &[i8]) -> Result<Self::Parent, Self::Error>;
-
-    fn write_unsigned(self, array: &[u8]) -> Result<Self::Parent, Self::Error>;
-
-    type WriteContents: WriteByteListContents<
-        Error = Self::Error,
-        Parent = Self::Parent>;
-
-    fn length(self, length: u32) -> Result<Self::WriteContents, Self::Error>;
-}
-
-pub trait WriteByteListContents: Sized
-{
-    type Parent;
-    type Error;
-
-    type WriteElement: WriteByte<Error = Self::Error>;
-
-    fn map(
-        self,
-        f: impl FnMut(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteByte>::Parent,
-                <Self::WriteElement as WriteByte>::Error>)
-            -> Result<Self::Parent, Self::Error>;
-
-    fn end(self) -> Result<Result<Self::Parent, Self>, Self::Error>;
-
-    fn enter(
-        self,
-        f: impl FnOnce(Self::WriteElement)
-            -> Result<
-                <Self::WriteElement as WriteByte>::Parent,
-                <Self::WriteElement as WriteByte>::Error>)
-        -> Result<Result<Self, Self>, Self::Error>;
-}
+    : super::ChildWrite
+    + super::Write<
+        i8,
+        Next = Self::Parent>
+    + super::WriteUnsigned<
+        u8,
+        Next = Self::Parent> { }
 
 pub trait WriteBoolName
-{
-    type Parent;
-    type Error;
-    type ValueWriter: WriteBool<Error = Self::Error, Parent = Self::Parent>;
-
-    fn name(self, name: &str) -> Result<Self::ValueWriter, Self::Error>;
-}
+    : super::ChildWrite
+    + super::WriteName<
+        Next: WriteBool<
+            Error = Self::Error,
+            Parent = Self::Parent>> { }
 
 pub trait WriteBool
-{
-    type Parent;
-    type Error;
+    : super::ChildWrite
+    + super::Write<
+        bool,
+        Next = Self::Parent> { }
 
-    fn write(self, bool: bool) -> Result<Self::Parent, Self::Error>;
-}
+pub trait WriteByteListName
+    : super::ChildWrite
+    + super::WriteName<
+        Next: WriteByteList<
+            Error = Self::Error,
+            Parent = Self::Parent>> { }
+
+pub trait WriteByteList
+    : super::ChildWrite
+    + for<'a> super::Write<
+        &'a [i8],
+        Next = Self::Parent>
+    + for<'a> super::WriteUnsigned<
+        &'a [u8],
+        Next = Self::Parent>
+    + super::WriteLen<
+        ChildNext: WriteByteListContents<
+            Error = Self::Error,
+            Parent = Self::Parent>>
+    + super::WriteArray<
+        ChildWrite: WriteByte<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }
+
+pub trait WriteByteListContents
+    : super::ChildWrite
+    + super::WriteAppend<
+        i8,
+        Next = Self::Parent>
+    + super::WriteAppendUnsigned<
+        u8,
+        Next = Self::Parent>
+    + super::WriteExtend<
+        ChildWrite: WriteByte<
+            Error = Self::Error,
+            Parent = Self::Parent>,
+        Next = Self::Parent> { }

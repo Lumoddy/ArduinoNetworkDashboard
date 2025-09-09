@@ -1,6 +1,6 @@
 
 mod writer;
-mod raw;
+mod part;
 mod byte;
 mod short;
 mod int;
@@ -13,7 +13,7 @@ mod int_array;
 mod long_array;
 
 pub use writer::*;
-pub use raw::*;
+pub use part::*;
 pub use byte::*;
 pub use short::*;
 pub use int::*;
@@ -24,7 +24,3 @@ pub use list::*;
 pub use compound::*;
 pub use int_array::*;
 pub use long_array::*;
-
-// Spec according to:
-// - https://github.com/acfoltzer/nbt/blob/master/NBT-spec.txt
-// - https://minecraft.wiki/w/NBT_format
