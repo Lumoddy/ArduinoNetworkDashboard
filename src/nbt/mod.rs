@@ -4,6 +4,7 @@ mod binary;
 
 pub use tag::*;
 pub use binary::*;
+pub mod reader;
 pub mod writer;
 
 // Spec according to:
