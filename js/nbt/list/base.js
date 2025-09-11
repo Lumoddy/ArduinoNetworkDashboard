@@ -40,35 +40,26 @@ import { Tag } from "../base.js";
 
     /**
     @returns {number}
-    @public @override*/ static typeId() { return 9 }
-
-    /**
-    @returns {number}
-    @public @override*/ typeId() { return 9 }
-
-    /**
-    @returns {number}
-    @public @virtual*/ static elementTypeId()
-    {
-        throw new TypeError("Cannot call abstract function.");
-    }
-
-    /**
-    @returns {number}
-    @public @virtual*/ elementTypeId()
-    {
-        throw new TypeError("Cannot call abstract function.");
-    }
-
-    /**
-    @returns {number}
     @public @abstract*/ get length()
     {
         throw new TypeError("Cannot call abstract length of ListTag.");
     }
-    /**
-    @public @abstract*/ set length(value)
-    {
-        throw new TypeError("Cannot call abstract length of ListTag.");
-    }
 }
+
+/**
+@export @typedef {
+    | EmptyListTag
+    | ByteListTag
+    | ShortListTag
+    | IntListTag
+    | LongListTag
+    | FloatListTag
+    | DoubleListTag
+    | ByteArrayListTag
+    | StringListTag
+    | ListListTag
+    | CompoundListTag
+    | IntArrayListTag
+    | LongArrayListTag
+} ListTagUnion
+*/

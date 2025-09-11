@@ -1,4 +1,3 @@
-export * from "./nbt/index.js";
 
 export * from "./nbt/base.js";
 export * from "./nbt/byte.js";
