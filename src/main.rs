@@ -201,6 +201,8 @@ fn process() -> !
 
         enum Response
         {
+            SetPinSuccess,
+            SetPinModeSuccess,
             GetConfig,
             GetPin
             {
@@ -219,15 +221,18 @@ fn process() -> !
                 // MARK: /get-config
                 (Type::Compound, "get-config") =>
                 {
-                    match collect_type_or_end_and_name::<8>(&mut reader, "get-config/")
-                        .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
+                    loop
                     {
-                        None => (),
-                        _ => return Err(ReadError::InvalidTag
+                        match collect_type_or_end_and_name::<8>(&mut reader, "get-config/")
+                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
                         {
-                            message: "Invalid field.",
-                            path: "get-config/",
-                        })
+                            None => break,
+                            _ => return Err(ReadError::InvalidTag
+                            {
+                                message: "Invalid field.",
+                                path: "get-config/",
+                            })
+                        }
                     }
 
                     // MARK: .   +get-config
@@ -239,48 +244,51 @@ fn process() -> !
                     let mut pin: Option<InteractablePinId> = None;
                     let mut state: Option<u8> = None;
 
-                    match collect_type_or_end_and_name::<8>(&mut reader, "set-pin/")
-                        .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
+                    loop
                     {
-                        None => (),
-                        // MARK: .   /pin
-                        Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
-                            .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin/")
+                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
                         {
-                            "D2" => pin = Some(InteractablePinId::D2),
-                            "D3" => pin = Some(InteractablePinId::D3),
-                            "D4" => pin = Some(InteractablePinId::D4),
-                            "D5" => pin = Some(InteractablePinId::D5),
-                            "D6" => pin = Some(InteractablePinId::D6),
-                            "D7" => pin = Some(InteractablePinId::D7),
-                            "D8" => pin = Some(InteractablePinId::D8),
-                            "D9" => pin = Some(InteractablePinId::D9),
-                            "D10" => pin = Some(InteractablePinId::D10),
-                            "D11" => pin = Some(InteractablePinId::D11),
-                            "D12" => pin = Some(InteractablePinId::D12),
-                            "D13" => pin = Some(InteractablePinId::D13),
-                            "A0" => pin = Some(InteractablePinId::A0),
-                            "A1" => pin = Some(InteractablePinId::A1),
-                            "A2" => pin = Some(InteractablePinId::A2),
-                            "A3" => pin = Some(InteractablePinId::A3),
-                            "A4" => pin = Some(InteractablePinId::A4),
-                            "A5" => pin = Some(InteractablePinId::A5),
+                            None => break,
+                            // MARK: .   /pin
+                            Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
+                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                            {
+                                "D2" => pin = Some(InteractablePinId::D2),
+                                "D3" => pin = Some(InteractablePinId::D3),
+                                "D4" => pin = Some(InteractablePinId::D4),
+                                "D5" => pin = Some(InteractablePinId::D5),
+                                "D6" => pin = Some(InteractablePinId::D6),
+                                "D7" => pin = Some(InteractablePinId::D7),
+                                "D8" => pin = Some(InteractablePinId::D8),
+                                "D9" => pin = Some(InteractablePinId::D9),
+                                "D10" => pin = Some(InteractablePinId::D10),
+                                "D11" => pin = Some(InteractablePinId::D11),
+                                "D12" => pin = Some(InteractablePinId::D12),
+                                "D13" => pin = Some(InteractablePinId::D13),
+                                "A0" => pin = Some(InteractablePinId::A0),
+                                "A1" => pin = Some(InteractablePinId::A1),
+                                "A2" => pin = Some(InteractablePinId::A2),
+                                "A3" => pin = Some(InteractablePinId::A3),
+                                "A4" => pin = Some(InteractablePinId::A4),
+                                "A5" => pin = Some(InteractablePinId::A5),
+                                _ => return Err(ReadError::InvalidTag
+                                {
+                                    message: "Invalid pin.",
+                                    path: "set-pin/pin",
+                                })
+                            }
+                            // MARK: .   /state
+                            Some((Type::Byte, "state")) =>
+                            {
+                                state = Some(reader.read_ubyte()?);
+                            }
                             _ => return Err(ReadError::InvalidTag
                             {
-                                message: "Invalid pin.",
-                                path: "set-pin/pin",
+                                message: "Invalid field.",
+                                path: "set-pin/",
                             })
                         }
-                        // MARK: .   /state
-                        Some((Type::Byte, "state")) =>
-                        {
-                            state = Some(reader.read_ubyte()?);
-                        }
-                        _ => return Err(ReadError::InvalidTag
-                        {
-                            message: "Invalid field.",
-                            path: "set-pin/",
-                        })
                     }
 
                     const INPUT_MODE_ERROR: ReadError = ReadError::InvalidTag
@@ -417,43 +425,46 @@ fn process() -> !
                 {
                     let mut pin: Option<InteractablePinId> = None;
 
-                    match collect_type_or_end_and_name::<8>(&mut reader, "get-pin/")
-                        .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
+                    loop
                     {
-                        None => (),
-                        // MARK: .   /pin
-                        Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
-                            .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                        match collect_type_or_end_and_name::<8>(&mut reader, "get-pin/")
+                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
                         {
-                            "D2" => pin = Some(InteractablePinId::D2),
-                            "D3" => pin = Some(InteractablePinId::D3),
-                            "D4" => pin = Some(InteractablePinId::D4),
-                            "D5" => pin = Some(InteractablePinId::D5),
-                            "D6" => pin = Some(InteractablePinId::D6),
-                            "D7" => pin = Some(InteractablePinId::D7),
-                            "D8" => pin = Some(InteractablePinId::D8),
-                            "D9" => pin = Some(InteractablePinId::D9),
-                            "D10" => pin = Some(InteractablePinId::D10),
-                            "D11" => pin = Some(InteractablePinId::D11),
-                            "D12" => pin = Some(InteractablePinId::D12),
-                            "D13" => pin = Some(InteractablePinId::D13),
-                            "A0" => pin = Some(InteractablePinId::A0),
-                            "A1" => pin = Some(InteractablePinId::A1),
-                            "A2" => pin = Some(InteractablePinId::A2),
-                            "A3" => pin = Some(InteractablePinId::A3),
-                            "A4" => pin = Some(InteractablePinId::A4),
-                            "A5" => pin = Some(InteractablePinId::A5),
+                            None => break,
+                            // MARK: .   /pin
+                            Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
+                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                            {
+                                "D2" => pin = Some(InteractablePinId::D2),
+                                "D3" => pin = Some(InteractablePinId::D3),
+                                "D4" => pin = Some(InteractablePinId::D4),
+                                "D5" => pin = Some(InteractablePinId::D5),
+                                "D6" => pin = Some(InteractablePinId::D6),
+                                "D7" => pin = Some(InteractablePinId::D7),
+                                "D8" => pin = Some(InteractablePinId::D8),
+                                "D9" => pin = Some(InteractablePinId::D9),
+                                "D10" => pin = Some(InteractablePinId::D10),
+                                "D11" => pin = Some(InteractablePinId::D11),
+                                "D12" => pin = Some(InteractablePinId::D12),
+                                "D13" => pin = Some(InteractablePinId::D13),
+                                "A0" => pin = Some(InteractablePinId::A0),
+                                "A1" => pin = Some(InteractablePinId::A1),
+                                "A2" => pin = Some(InteractablePinId::A2),
+                                "A3" => pin = Some(InteractablePinId::A3),
+                                "A4" => pin = Some(InteractablePinId::A4),
+                                "A5" => pin = Some(InteractablePinId::A5),
+                                _ => return Err(ReadError::InvalidTag
+                                {
+                                    message: "Invalid pin.",
+                                    path: "get-pin/pin",
+                                })
+                            }
                             _ => return Err(ReadError::InvalidTag
                             {
-                                message: "Invalid pin.",
-                                path: "get-pin/pin",
+                                message: "Invalid field.",
+                                path: "get-pin/",
                             })
                         }
-                        _ => return Err(ReadError::InvalidTag
-                        {
-                            message: "Invalid field.",
-                            path: "get-pin/",
-                        })
                     }
 
                     let state;
@@ -600,59 +611,62 @@ fn process() -> !
                     let mut pin: Option<InteractablePinId> = None;
                     let mut mode: Option<Mode> = None;
 
-                    match collect_type_or_end_and_name::<8>(&mut reader, "set-pin-mode/")
-                        .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
+                    loop
                     {
-                        None => (),
-                        // MARK: .   /pin
-                        Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
-                            .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin-mode/")
+                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
                         {
-                            "D2" => pin = Some(InteractablePinId::D2),
-                            "D3" => pin = Some(InteractablePinId::D3),
-                            "D4" => pin = Some(InteractablePinId::D4),
-                            "D5" => pin = Some(InteractablePinId::D5),
-                            "D6" => pin = Some(InteractablePinId::D6),
-                            "D7" => pin = Some(InteractablePinId::D7),
-                            "D8" => pin = Some(InteractablePinId::D8),
-                            "D9" => pin = Some(InteractablePinId::D9),
-                            "D10" => pin = Some(InteractablePinId::D10),
-                            "D11" => pin = Some(InteractablePinId::D11),
-                            "D12" => pin = Some(InteractablePinId::D12),
-                            "D13" => pin = Some(InteractablePinId::D13),
-                            "A0" => pin = Some(InteractablePinId::A0),
-                            "A1" => pin = Some(InteractablePinId::A1),
-                            "A2" => pin = Some(InteractablePinId::A2),
-                            "A3" => pin = Some(InteractablePinId::A3),
-                            "A4" => pin = Some(InteractablePinId::A4),
-                            "A5" => pin = Some(InteractablePinId::A5),
+                            None => break,
+                            // MARK: .   /pin
+                            Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
+                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                            {
+                                "D2" => pin = Some(InteractablePinId::D2),
+                                "D3" => pin = Some(InteractablePinId::D3),
+                                "D4" => pin = Some(InteractablePinId::D4),
+                                "D5" => pin = Some(InteractablePinId::D5),
+                                "D6" => pin = Some(InteractablePinId::D6),
+                                "D7" => pin = Some(InteractablePinId::D7),
+                                "D8" => pin = Some(InteractablePinId::D8),
+                                "D9" => pin = Some(InteractablePinId::D9),
+                                "D10" => pin = Some(InteractablePinId::D10),
+                                "D11" => pin = Some(InteractablePinId::D11),
+                                "D12" => pin = Some(InteractablePinId::D12),
+                                "D13" => pin = Some(InteractablePinId::D13),
+                                "A0" => pin = Some(InteractablePinId::A0),
+                                "A1" => pin = Some(InteractablePinId::A1),
+                                "A2" => pin = Some(InteractablePinId::A2),
+                                "A3" => pin = Some(InteractablePinId::A3),
+                                "A4" => pin = Some(InteractablePinId::A4),
+                                "A5" => pin = Some(InteractablePinId::A5),
+                                _ => return Err(ReadError::InvalidTag
+                                {
+                                    message: "Invalid pin.",
+                                    path: "set-pin-mode/pin",
+                                })
+                            }
+                            // MARK: .   /mode
+                            Some((Type::String, "mode")) => match collect_string::<16>(&mut reader, "")
+                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                            {
+                                "input" => mode = Some(Mode::DigitalInput),
+                                "output" => mode = Some(Mode::DigitalOutput),
+                                "digital-input" => mode = Some(Mode::DigitalInput),
+                                "digital-output" => mode = Some(Mode::DigitalOutput),
+                                "analog-input" => mode = Some(Mode::AnalogInput),
+                                "analog-output" => mode = Some(Mode::AnalogOutput),
+                                _ => return Err(ReadError::InvalidTag
+                                {
+                                    message: "Invalid mode.",
+                                    path: "set-pin-mode/mode",
+                                })
+                            }
                             _ => return Err(ReadError::InvalidTag
                             {
-                                message: "Invalid pin.",
-                                path: "set-pin-mode/pin",
+                                message: "Invalid field.",
+                                path: "set-pin-mode/",
                             })
                         }
-                        // MARK: .   /mode
-                        Some((Type::String, "mode")) => match collect_string::<16>(&mut reader, "")
-                            .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
-                        {
-                            "input" => mode = Some(Mode::DigitalInput),
-                            "output" => mode = Some(Mode::DigitalOutput),
-                            "digital-input" => mode = Some(Mode::DigitalInput),
-                            "digital-output" => mode = Some(Mode::DigitalOutput),
-                            "analog-input" => mode = Some(Mode::AnalogInput),
-                            "analog-output" => mode = Some(Mode::AnalogOutput),
-                            _ => return Err(ReadError::InvalidTag
-                            {
-                                message: "Invalid mode.",
-                                path: "set-pin-mode/mode",
-                            })
-                        }
-                        _ => return Err(ReadError::InvalidTag
-                        {
-                            message: "Invalid field.",
-                            path: "set-pin-mode/",
-                        })
                     }
 
                     const INPUT_ANALOG_ERROR: ReadError = ReadError::StateError
@@ -857,6 +871,26 @@ fn process() -> !
                 {
                     match response
                     {
+                        Response::SetPinSuccess =>
+                        {
+                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                            writer.write_type(Type::Compound)?;
+                            writer.write_name("+set-pin")?;
+                            {
+                                writer.write_end()?;
+                            }
+                        },
+                        Response::SetPinModeSuccess =>
+                        {
+                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                            writer.write_type(Type::Compound)?;
+                            writer.write_name("+set-pin-mode")?;
+                            {
+                                writer.write_end()?;
+                            }
+                        },
                         Response::GetPin { pin, state } =>
                         {
                             block!(raw_serial_writer.write(CONTROL_BYTE))?;
@@ -882,6 +916,10 @@ fn process() -> !
                             writer.write_type(Type::Compound)?;
                             writer.write_name("+get-config")?;
                             {
+                                writer.write_type(Type::String)?;
+                                writer.write_name("name")?;
+                                writer.write_string("Arduino Uno")?;
+
                                 writer.write_type(Type::List)?;
                                 writer.write_name("pins")?;
                                 writer.write_element_type(ElementType::Compound)?;
@@ -932,8 +970,6 @@ fn process() -> !
                                     write_pin("A3", "A3", &["digital-input", "digital-output"])?;
                                     write_pin("A4", "A4", &["digital-input", "digital-output"])?;
                                     write_pin("A5", "A5", &["digital-input", "digital-output"])?;
-
-                                    writer.write_end()?;
                                 }
 
                                 writer.write_end()?;
