@@ -4,31 +4,293 @@
 #![feature(abi_avr_interrupt)]
 
 use arduino_hal::clock::Clock;
-use arduino_hal::port::mode;
-use arduino_hal::port::Pin;
-use arduino_hal::port::PinOps;
+use arduino_hal::hal::port;
 use arduino_hal::prelude::_embedded_hal_serial_Read;
 use arduino_hal::prelude::_embedded_hal_serial_Write;
 use arduino_hal::prelude::_unwrap_infallible_UnwrapInfallible;
 use arduino_hal::DefaultClock;
+use interactive::PinDigitalInteraction;
+use interactive::PinDigitalInteractionChanges;
+use interactive::PinModeInteraction;
 use nb::block;
 use nbt::reader::ReadRaw;
 use nbt::ElementType;
 mod panic_handler;
 mod nbt;
+mod interactive;
 
 use core::convert::Infallible;
 
 use nbt::writer::WriteRaw;
 use nbt::Type;
 
+impl interactive::PinMode
+{
+    const AS_STRING_PREFERRED_CAPACITY: usize = 16;
+}
+
+impl TryFrom<&str> for interactive::PinMode
+{
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error>
+    {
+        match value
+        {
+            "input" | "digital-input" => Ok(interactive::PinMode::DigitalInput),
+            "output" | "digital-output" => Ok(interactive::PinMode::DigitalOutput),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<interactive::PinMode> for &'static str
+{
+    fn from(value: interactive::PinMode) -> Self
+    {
+        match value
+        {
+            interactive::PinMode::DigitalInput => "digital-input",
+            interactive::PinMode::DigitalOutput => "digital-output",
+        }
+    }
+}
+
 #[arduino_hal::entry]
 fn main() -> ! { process() }
 
-pub enum InteractablePin<PIN: PinOps>
+#[derive(Clone, Copy)]
+pub enum InteractivePinID
 {
-    DigitalInput(Pin<mode::Input<mode::PullUp>, PIN>),
-    DigitalOutput(Pin<mode::Output, PIN>),
+    D2, D3, D4, D5, D6, D7,
+    D8, D9, D10, D11, D12, D13,
+    A0, A1, A2, A3, A4, A5,
+}
+
+impl InteractivePinID
+{
+    const AS_STRING_PREFERRED_CAPACITY: usize = 4;
+}
+
+impl TryFrom<&str> for InteractivePinID
+{
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error>
+    {
+        match value
+        {
+            "d2" | "D2" => Ok(InteractivePinID::D2),
+            "d3" | "D3" => Ok(InteractivePinID::D3),
+            "d4" | "D4" => Ok(InteractivePinID::D4),
+            "d5" | "D5" => Ok(InteractivePinID::D5),
+            "d6" | "D6" => Ok(InteractivePinID::D6),
+            "d7" | "D7" => Ok(InteractivePinID::D7),
+            "d8" | "D8" => Ok(InteractivePinID::D8),
+            "d9" | "D9" => Ok(InteractivePinID::D9),
+            "d10" | "D10" => Ok(InteractivePinID::D10),
+            "d11" | "D11" => Ok(InteractivePinID::D11),
+            "d12" | "D12" => Ok(InteractivePinID::D12),
+            "d13" | "D13" => Ok(InteractivePinID::D13),
+            "a0" | "A0" => Ok(InteractivePinID::A0),
+            "a1" | "A1" => Ok(InteractivePinID::A1),
+            "a2" | "A2" => Ok(InteractivePinID::A2),
+            "a3" | "A3" => Ok(InteractivePinID::A3),
+            "a4" | "A4" => Ok(InteractivePinID::A4),
+            "a5" | "A5" => Ok(InteractivePinID::A5),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<InteractivePinID> for &'static str
+{
+    fn from(value: InteractivePinID) -> Self
+    {
+        match value
+        {
+            InteractivePinID::D2 => "D2",
+            InteractivePinID::D3 => "D3",
+            InteractivePinID::D4 => "D4",
+            InteractivePinID::D5 => "D5",
+            InteractivePinID::D6 => "D6",
+            InteractivePinID::D7 => "D7",
+            InteractivePinID::D8 => "D8",
+            InteractivePinID::D9 => "D9",
+            InteractivePinID::D10 => "D10",
+            InteractivePinID::D11 => "D11",
+            InteractivePinID::D12 => "D12",
+            InteractivePinID::D13 => "D13",
+            InteractivePinID::A0 => "A0",
+            InteractivePinID::A1 => "A1",
+            InteractivePinID::A2 => "A2",
+            InteractivePinID::A3 => "A3",
+            InteractivePinID::A4 => "A4",
+            InteractivePinID::A5 => "A5",
+        }
+    }
+}
+
+pub struct InteractivePins
+{
+    d2: interactive::Pin<port::PD2>,
+    d3: interactive::Pin<port::PD3>,
+    d4: interactive::Pin<port::PD4>,
+    d5: interactive::Pin<port::PD5>,
+    d6: interactive::Pin<port::PD6>,
+    d7: interactive::Pin<port::PD7>,
+    d8: interactive::Pin<port::PB0>,
+    d9: interactive::Pin<port::PB1>,
+    d10: interactive::Pin<port::PB2>,
+    d11: interactive::Pin<port::PB3>,
+    d12: interactive::Pin<port::PB4>,
+    d13: interactive::Pin<port::PB5>,
+    a0: interactive::Pin<port::PC0>,
+    a1: interactive::Pin<port::PC1>,
+    a2: interactive::Pin<port::PC2>,
+    a3: interactive::Pin<port::PC3>,
+    a4: interactive::Pin<port::PC4>,
+    a5: interactive::Pin<port::PC5>,
+}
+
+pub struct PickedInteractivePin<'p>
+{
+    pub all_pins: &'p mut InteractivePins,
+    pub pin_id: InteractivePinID,
+}
+
+impl<'p> interactive::PinDigitalInteraction for PickedInteractivePin<'p>
+{
+    fn get_pin_is_high(&self) -> Result<bool, interactive::PinGetPowerError>
+    {
+        match self.pin_id
+        {
+            InteractivePinID::D2 => self.all_pins.d2.get_pin_is_high(),
+            InteractivePinID::D3 => self.all_pins.d3.get_pin_is_high(),
+            InteractivePinID::D4 => self.all_pins.d4.get_pin_is_high(),
+            InteractivePinID::D5 => self.all_pins.d5.get_pin_is_high(),
+            InteractivePinID::D6 => self.all_pins.d6.get_pin_is_high(),
+            InteractivePinID::D7 => self.all_pins.d7.get_pin_is_high(),
+            InteractivePinID::D8 => self.all_pins.d8.get_pin_is_high(),
+            InteractivePinID::D9 => self.all_pins.d9.get_pin_is_high(),
+            InteractivePinID::D10 => self.all_pins.d10.get_pin_is_high(),
+            InteractivePinID::D11 => self.all_pins.d11.get_pin_is_high(),
+            InteractivePinID::D12 => self.all_pins.d12.get_pin_is_high(),
+            InteractivePinID::D13 => self.all_pins.d13.get_pin_is_high(),
+            InteractivePinID::A0 => self.all_pins.a0.get_pin_is_high(),
+            InteractivePinID::A1 => self.all_pins.a1.get_pin_is_high(),
+            InteractivePinID::A2 => self.all_pins.a2.get_pin_is_high(),
+            InteractivePinID::A3 => self.all_pins.a3.get_pin_is_high(),
+            InteractivePinID::A4 => self.all_pins.a4.get_pin_is_high(),
+            InteractivePinID::A5 => self.all_pins.a5.get_pin_is_high(),
+        }
+    }
+
+    fn set_pin_is_high(&mut self, power: bool) -> Result<(), interactive::PinSetPowerError>
+    {
+        match self.pin_id
+        {
+            InteractivePinID::D2 => self.all_pins.d2.set_pin_is_high(power),
+            InteractivePinID::D3 => self.all_pins.d3.set_pin_is_high(power),
+            InteractivePinID::D4 => self.all_pins.d4.set_pin_is_high(power),
+            InteractivePinID::D5 => self.all_pins.d5.set_pin_is_high(power),
+            InteractivePinID::D6 => self.all_pins.d6.set_pin_is_high(power),
+            InteractivePinID::D7 => self.all_pins.d7.set_pin_is_high(power),
+            InteractivePinID::D8 => self.all_pins.d8.set_pin_is_high(power),
+            InteractivePinID::D9 => self.all_pins.d9.set_pin_is_high(power),
+            InteractivePinID::D10 => self.all_pins.d10.set_pin_is_high(power),
+            InteractivePinID::D11 => self.all_pins.d11.set_pin_is_high(power),
+            InteractivePinID::D12 => self.all_pins.d12.set_pin_is_high(power),
+            InteractivePinID::D13 => self.all_pins.d13.set_pin_is_high(power),
+            InteractivePinID::A0 => self.all_pins.a0.set_pin_is_high(power),
+            InteractivePinID::A1 => self.all_pins.a1.set_pin_is_high(power),
+            InteractivePinID::A2 => self.all_pins.a2.set_pin_is_high(power),
+            InteractivePinID::A3 => self.all_pins.a3.set_pin_is_high(power),
+            InteractivePinID::A4 => self.all_pins.a4.set_pin_is_high(power),
+            InteractivePinID::A5 => self.all_pins.a5.set_pin_is_high(power),
+        }
+    }
+}
+
+impl<'p> interactive::PinDigitalInteractionChanges for PickedInteractivePin<'p>
+{
+    fn detect_pin_changed(&mut self) -> Result<bool, interactive::PinPowerChangeError>
+    {
+        match self.pin_id
+        {
+            InteractivePinID::D2 => self.all_pins.d2.detect_pin_changed(),
+            InteractivePinID::D3 => self.all_pins.d3.detect_pin_changed(),
+            InteractivePinID::D4 => self.all_pins.d4.detect_pin_changed(),
+            InteractivePinID::D5 => self.all_pins.d5.detect_pin_changed(),
+            InteractivePinID::D6 => self.all_pins.d6.detect_pin_changed(),
+            InteractivePinID::D7 => self.all_pins.d7.detect_pin_changed(),
+            InteractivePinID::D8 => self.all_pins.d8.detect_pin_changed(),
+            InteractivePinID::D9 => self.all_pins.d9.detect_pin_changed(),
+            InteractivePinID::D10 => self.all_pins.d10.detect_pin_changed(),
+            InteractivePinID::D11 => self.all_pins.d11.detect_pin_changed(),
+            InteractivePinID::D12 => self.all_pins.d12.detect_pin_changed(),
+            InteractivePinID::D13 => self.all_pins.d13.detect_pin_changed(),
+            InteractivePinID::A0 => self.all_pins.a0.detect_pin_changed(),
+            InteractivePinID::A1 => self.all_pins.a1.detect_pin_changed(),
+            InteractivePinID::A2 => self.all_pins.a2.detect_pin_changed(),
+            InteractivePinID::A3 => self.all_pins.a3.detect_pin_changed(),
+            InteractivePinID::A4 => self.all_pins.a4.detect_pin_changed(),
+            InteractivePinID::A5 => self.all_pins.a5.detect_pin_changed(),
+        }
+    }
+}
+
+impl<'p> interactive::PinModeInteraction for PickedInteractivePin<'p>
+{
+    fn get_pin_mode(&self) -> Result<interactive::PinMode, interactive::PinGetModeError>
+    {
+        match self.pin_id
+        {
+            InteractivePinID::D2 => self.all_pins.d2.get_pin_mode(),
+            InteractivePinID::D3 => self.all_pins.d3.get_pin_mode(),
+            InteractivePinID::D4 => self.all_pins.d4.get_pin_mode(),
+            InteractivePinID::D5 => self.all_pins.d5.get_pin_mode(),
+            InteractivePinID::D6 => self.all_pins.d6.get_pin_mode(),
+            InteractivePinID::D7 => self.all_pins.d7.get_pin_mode(),
+            InteractivePinID::D8 => self.all_pins.d8.get_pin_mode(),
+            InteractivePinID::D9 => self.all_pins.d9.get_pin_mode(),
+            InteractivePinID::D10 => self.all_pins.d10.get_pin_mode(),
+            InteractivePinID::D11 => self.all_pins.d11.get_pin_mode(),
+            InteractivePinID::D12 => self.all_pins.d12.get_pin_mode(),
+            InteractivePinID::D13 => self.all_pins.d13.get_pin_mode(),
+            InteractivePinID::A0 => self.all_pins.a0.get_pin_mode(),
+            InteractivePinID::A1 => self.all_pins.a1.get_pin_mode(),
+            InteractivePinID::A2 => self.all_pins.a2.get_pin_mode(),
+            InteractivePinID::A3 => self.all_pins.a3.get_pin_mode(),
+            InteractivePinID::A4 => self.all_pins.a4.get_pin_mode(),
+            InteractivePinID::A5 => self.all_pins.a5.get_pin_mode(),
+        }
+    }
+
+    fn set_pin_mode(&mut self, mode: interactive::PinMode) -> Result<(), interactive::PinSetModeError>
+    {
+        match self.pin_id
+        {
+            InteractivePinID::D2 => self.all_pins.d2.set_pin_mode(mode),
+            InteractivePinID::D3 => self.all_pins.d3.set_pin_mode(mode),
+            InteractivePinID::D4 => self.all_pins.d4.set_pin_mode(mode),
+            InteractivePinID::D5 => self.all_pins.d5.set_pin_mode(mode),
+            InteractivePinID::D6 => self.all_pins.d6.set_pin_mode(mode),
+            InteractivePinID::D7 => self.all_pins.d7.set_pin_mode(mode),
+            InteractivePinID::D8 => self.all_pins.d8.set_pin_mode(mode),
+            InteractivePinID::D9 => self.all_pins.d9.set_pin_mode(mode),
+            InteractivePinID::D10 => self.all_pins.d10.set_pin_mode(mode),
+            InteractivePinID::D11 => self.all_pins.d11.set_pin_mode(mode),
+            InteractivePinID::D12 => self.all_pins.d12.set_pin_mode(mode),
+            InteractivePinID::D13 => self.all_pins.d13.set_pin_mode(mode),
+            InteractivePinID::A0 => self.all_pins.a0.set_pin_mode(mode),
+            InteractivePinID::A1 => self.all_pins.a1.set_pin_mode(mode),
+            InteractivePinID::A2 => self.all_pins.a2.set_pin_mode(mode),
+            InteractivePinID::A3 => self.all_pins.a3.set_pin_mode(mode),
+            InteractivePinID::A4 => self.all_pins.a4.set_pin_mode(mode),
+            InteractivePinID::A5 => self.all_pins.a5.set_pin_mode(mode),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -36,8 +298,7 @@ enum ReadError
 {
     FoundControlByte(u8),
     TimedOut,
-    InvalidTag { message: &'static str, path: &'static str },
-    StateError { message: &'static str, path: &'static str },
+    InvalidRequest { message: &'static str, path: &'static str },
 }
 
 impl From<&mut ReadError> for ReadError
@@ -64,33 +325,27 @@ fn process() -> !
     let mut raw_serial_reader = unsafe { core::ptr::read(&serial_reader) };
     let mut raw_serial_writer = unsafe { core::ptr::read(&serial_writer) };
 
-    pub enum InteractablePinId
+    let mut interactive_pins = InteractivePins
     {
-        D2, D3, D4, D5, D6, D7,
-        D8, D9, D10, D11, D12, D13,
-        A0, A1, A2, A3, A4, A5,
-    }
-
-    let mut interactive_d2 = InteractablePin::DigitalInput(pins.d2.into_pull_up_input());
-    let mut interactive_d3 = InteractablePin::DigitalInput(pins.d3.into_pull_up_input());
-    let mut interactive_d4 = InteractablePin::DigitalInput(pins.d4.into_pull_up_input());
-    let mut interactive_d5 = InteractablePin::DigitalInput(pins.d5.into_pull_up_input());
-    let mut interactive_d6 = InteractablePin::DigitalInput(pins.d6.into_pull_up_input());
-    let mut interactive_d7 = InteractablePin::DigitalInput(pins.d7.into_pull_up_input());
-
-    let mut interactive_d8 = InteractablePin::DigitalInput(pins.d8.into_pull_up_input());
-    let mut interactive_d9 = InteractablePin::DigitalInput(pins.d9.into_pull_up_input());
-    let mut interactive_d10 = InteractablePin::DigitalInput(pins.d10.into_pull_up_input());
-    let mut interactive_d11 = InteractablePin::DigitalInput(pins.d11.into_pull_up_input());
-    let mut interactive_d12 = InteractablePin::DigitalInput(pins.d12.into_pull_up_input());
-    let mut interactive_d13 = InteractablePin::DigitalInput(pins.d13.into_pull_up_input());
-
-    let mut interactive_a0 = InteractablePin::DigitalInput(pins.a0.into_pull_up_input());
-    let mut interactive_a1 = InteractablePin::DigitalInput(pins.a1.into_pull_up_input());
-    let mut interactive_a2 = InteractablePin::DigitalInput(pins.a2.into_pull_up_input());
-    let mut interactive_a3 = InteractablePin::DigitalInput(pins.a3.into_pull_up_input());
-    let mut interactive_a4 = InteractablePin::DigitalInput(pins.a4.into_pull_up_input());
-    let mut interactive_a5 = InteractablePin::DigitalInput(pins.a5.into_pull_up_input());
+        d2: pins.d2.into_pull_up_input().into(),
+        d3: pins.d3.into_pull_up_input().into(),
+        d4: pins.d4.into_pull_up_input().into(),
+        d5: pins.d5.into_pull_up_input().into(),
+        d6: pins.d6.into_pull_up_input().into(),
+        d7: pins.d7.into_pull_up_input().into(),
+        d8: pins.d8.into_pull_up_input().into(),
+        d9: pins.d9.into_pull_up_input().into(),
+        d10: pins.d10.into_pull_up_input().into(),
+        d11: pins.d11.into_pull_up_input().into(),
+        d12: pins.d12.into_pull_up_input().into(),
+        d13: pins.d13.into_pull_up_input().into(),
+        a0: pins.a0.into_pull_up_input().into(),
+        a1: pins.a1.into_pull_up_input().into(),
+        a2: pins.a2.into_pull_up_input().into(),
+        a3: pins.a3.into_pull_up_input().into(),
+        a4: pins.a4.into_pull_up_input().into(),
+        a5: pins.a5.into_pull_up_input().into(),
+    };
 
     // https://symbl.cc/en/unicode-table/
     const CONTROL_BYTE: u8 = b'';
@@ -160,6 +415,67 @@ fn process() -> !
 
     loop
     {
+        unsafe
+        {
+            let mut write_change = |
+                pin: InteractivePinID,
+                now_is_high: bool|
+            {
+                infallible_scope(||
+                {
+                    block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                    block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                    writer.write_type(Type::Compound)?;
+                    writer.write_name("pin-changed")?;
+                    {
+                        writer.write_type(Type::String)?;
+                        writer.write_name("pin")?;
+                        writer.write_string(pin.into())?;
+
+                        writer.write_type(Type::Byte)?;
+                        writer.write_name("is-high")?;
+                        writer.write_bool(now_is_high)?;
+
+                        writer.write_end()?;
+                    }
+
+                    Ok(())
+                });
+            };
+
+            let mut try_write_change = |pin: InteractivePinID|
+            {
+                if let Ok(is_high) = (PickedInteractivePin
+                    {
+                        all_pins: &mut interactive_pins,
+                        pin_id: pin,
+                    })
+                    .detect_pin_changed()
+                {
+                    write_change(pin, is_high)
+                }
+            };
+
+            try_write_change(InteractivePinID::D2);
+            try_write_change(InteractivePinID::D3);
+            try_write_change(InteractivePinID::D4);
+            try_write_change(InteractivePinID::D5);
+            try_write_change(InteractivePinID::D6);
+            try_write_change(InteractivePinID::D7);
+            try_write_change(InteractivePinID::D8);
+            try_write_change(InteractivePinID::D9);
+            try_write_change(InteractivePinID::D10);
+            try_write_change(InteractivePinID::D11);
+            try_write_change(InteractivePinID::D12);
+            try_write_change(InteractivePinID::D13);
+            try_write_change(InteractivePinID::A0);
+            try_write_change(InteractivePinID::A1);
+            try_write_change(InteractivePinID::A2);
+            try_write_change(InteractivePinID::A3);
+            try_write_change(InteractivePinID::A4);
+            try_write_change(InteractivePinID::A5);
+        }
+
         match block!(raw_serial_reader.read()).unwrap_infallible()
         {
             CONTROL_BYTE =>
@@ -180,12 +496,12 @@ fn process() -> !
                                 writer.write_type(Type::String)?;
                                 writer.write_name("type")?;
                                 writer.write_string(
-                                    "control-char")?;
+                                    "control-byte")?;
 
                                 writer.write_type(Type::String)?;
                                 writer.write_name("message")?;
                                 writer.write_string(
-                                    "Invalid control char received.")?;
+                                    "Invalid control byte received.")?;
 
                                 writer.write_end()?;
                             }
@@ -201,33 +517,32 @@ fn process() -> !
 
         enum Response
         {
-            SetPinSuccess,
-            SetPinModeSuccess,
             GetConfig,
-            GetPin
-            {
-                pin: &'static str,
-                state: u8,
-            },
+            GetPinOk { pin: InteractivePinID, is_high: bool },
+            GetPinError { pin: InteractivePinID, message: &'static str },
+            SetPinOk { pin: InteractivePinID },
+            SetPinError { pin: InteractivePinID, message: &'static str },
+            GetPinModeOk { pin: InteractivePinID, mode: &'static str },
+            GetPinModeError { pin: InteractivePinID, message: &'static str },
+            SetPinModeOk { pin: InteractivePinID },
+            SetPinModeError { pin: InteractivePinID, message: &'static str },
         }
 
-        let mut response: Option<Response> = None;
-
-        if let Err(error) = try_scope(|| unsafe
+        match try_scope(|| unsafe
         {
             match collect_type_and_name::<16>(&mut reader, "")
                 .as_ref().map(|(tag, name)| (tag, name.as_str()))?
             {
-                // MARK: /get-config
+                // MARK: get-config
                 (Type::Compound, "get-config") =>
                 {
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "get-config/")
-                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
+                        match collect_type_or_end_and_name::<8>(&mut reader, "get-config/")?
+                            .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            _ => return Err(ReadError::InvalidTag
+                            _ => return Err(ReadError::InvalidRequest
                             {
                                 message: "Invalid field.",
                                 path: "get-config/",
@@ -235,864 +550,589 @@ fn process() -> !
                         }
                     }
 
-                    // MARK: .   +get-config
-                    response = Some(Response::GetConfig);
+                    Ok(Response::GetConfig)
                 }
-                // MARK: /set-pin
-                (Type::Compound, "set-pin") =>
-                {
-                    let mut pin: Option<InteractablePinId> = None;
-                    let mut state: Option<u8> = None;
-
-                    loop
-                    {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin/")
-                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
-                        {
-                            None => break,
-                            // MARK: .   /pin
-                            Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
-                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
-                            {
-                                "D2" => pin = Some(InteractablePinId::D2),
-                                "D3" => pin = Some(InteractablePinId::D3),
-                                "D4" => pin = Some(InteractablePinId::D4),
-                                "D5" => pin = Some(InteractablePinId::D5),
-                                "D6" => pin = Some(InteractablePinId::D6),
-                                "D7" => pin = Some(InteractablePinId::D7),
-                                "D8" => pin = Some(InteractablePinId::D8),
-                                "D9" => pin = Some(InteractablePinId::D9),
-                                "D10" => pin = Some(InteractablePinId::D10),
-                                "D11" => pin = Some(InteractablePinId::D11),
-                                "D12" => pin = Some(InteractablePinId::D12),
-                                "D13" => pin = Some(InteractablePinId::D13),
-                                "A0" => pin = Some(InteractablePinId::A0),
-                                "A1" => pin = Some(InteractablePinId::A1),
-                                "A2" => pin = Some(InteractablePinId::A2),
-                                "A3" => pin = Some(InteractablePinId::A3),
-                                "A4" => pin = Some(InteractablePinId::A4),
-                                "A5" => pin = Some(InteractablePinId::A5),
-                                _ => return Err(ReadError::InvalidTag
-                                {
-                                    message: "Invalid pin.",
-                                    path: "set-pin/pin",
-                                })
-                            }
-                            // MARK: .   /state
-                            Some((Type::Byte, "state")) =>
-                            {
-                                state = Some(reader.read_ubyte()?);
-                            }
-                            _ => return Err(ReadError::InvalidTag
-                            {
-                                message: "Invalid field.",
-                                path: "set-pin/",
-                            })
-                        }
-                    }
-
-                    const INPUT_MODE_ERROR: ReadError = ReadError::InvalidTag
-                    {
-                        message: "Specified pin is in input mode.",
-                        path: "set-pin",
-                    };
-
-                    // MARK: .   ->
-                    match (pin, state)
-                    {
-                        (Some(InteractablePinId::D2), Some(state)) => match (&mut interactive_d2, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D3), Some(state)) => match (&mut interactive_d3, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D4), Some(state)) => match (&mut interactive_d4, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D5), Some(state)) => match (&mut interactive_d5, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D6), Some(state)) => match (&mut interactive_d6, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D7), Some(state)) => match (&mut interactive_d7, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D8), Some(state)) => match (&mut interactive_d8, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D9), Some(state)) => match (&mut interactive_d9, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D10), Some(state)) => match (&mut interactive_d10, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D11), Some(state)) => match (&mut interactive_d11, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D12), Some(state)) => match (&mut interactive_d12, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::D13), Some(state)) => match (&mut interactive_d13, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::A0), Some(state)) => match (&mut interactive_a0, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::A1), Some(state)) => match (&mut interactive_a1, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::A2), Some(state)) => match (&mut interactive_a2, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::A3), Some(state)) => match (&mut interactive_a3, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::A4), Some(state)) => match (&mut interactive_a4, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (Some(InteractablePinId::A5), Some(state)) => match (&mut interactive_a5, state)
-                        {
-                            (InteractablePin::DigitalOutput(pin), 0) => pin.set_low(),
-                            (InteractablePin::DigitalOutput(pin), _) => pin.set_high(),
-                            _ => return Err(INPUT_MODE_ERROR),
-                        }
-                        (None, _) => return Err(ReadError::InvalidTag
-                        {
-                            message: "Missing 'pin' field.",
-                            path: "set-pin/",
-                        }),
-                        (_, None) => return Err(ReadError::InvalidTag
-                        {
-                            message: "Missing 'state' field.",
-                            path: "set-pin/",
-                        }),
-                    }
-                }
-                // MARK: /get-pin
+                // MARK: get-pin
                 (Type::Compound, "get-pin") =>
                 {
-                    let mut pin: Option<InteractablePinId> = None;
+                    let mut pin: Option<InteractivePinID> = None;
 
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "get-pin/")
-                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
+                        match collect_type_or_end_and_name::<8>(&mut reader, "get-pin/")?
+                            .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            // MARK: .   /pin
-                            Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
-                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                            Some((Type::String, "pin")) =>
                             {
-                                "D2" => pin = Some(InteractablePinId::D2),
-                                "D3" => pin = Some(InteractablePinId::D3),
-                                "D4" => pin = Some(InteractablePinId::D4),
-                                "D5" => pin = Some(InteractablePinId::D5),
-                                "D6" => pin = Some(InteractablePinId::D6),
-                                "D7" => pin = Some(InteractablePinId::D7),
-                                "D8" => pin = Some(InteractablePinId::D8),
-                                "D9" => pin = Some(InteractablePinId::D9),
-                                "D10" => pin = Some(InteractablePinId::D10),
-                                "D11" => pin = Some(InteractablePinId::D11),
-                                "D12" => pin = Some(InteractablePinId::D12),
-                                "D13" => pin = Some(InteractablePinId::D13),
-                                "A0" => pin = Some(InteractablePinId::A0),
-                                "A1" => pin = Some(InteractablePinId::A1),
-                                "A2" => pin = Some(InteractablePinId::A2),
-                                "A3" => pin = Some(InteractablePinId::A3),
-                                "A4" => pin = Some(InteractablePinId::A4),
-                                "A5" => pin = Some(InteractablePinId::A5),
-                                _ => return Err(ReadError::InvalidTag
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "get-pin/pin")?
+                                    .as_str().try_into()
                                 {
-                                    message: "Invalid pin.",
-                                    path: "get-pin/pin",
-                                })
-                            }
-                            _ => return Err(ReadError::InvalidTag
+                                    Ok(id) => pin = Some(id),
+                                    Err(()) => return Err(ReadError::InvalidRequest
+                                    {
+                                        message: "Invalid pin.",
+                                        path: "get-pin/pin",
+                                    })
+                                }
+                            },
+                            _ => return Err(ReadError::InvalidRequest
                             {
                                 message: "Invalid field.",
                                 path: "get-pin/",
-                            })
+                            }),
                         }
                     }
 
-                    let state;
-
-                    // MARK: .   ->
                     match pin
                     {
-                        Some(InteractablePinId::D2) => match &interactive_d2
+                        Some(pin) =>
                         {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D3) => match &interactive_d3
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D4) => match &interactive_d4
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D5) => match &interactive_d5
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D6) => match &interactive_d6
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D7) => match &interactive_d7
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D8) => match &interactive_d8
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D9) => match &interactive_d9
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D10) => match &interactive_d10
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D11) => match &interactive_d11
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D12) => match &interactive_d12
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::D13) => match &interactive_d13
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::A0) => match &interactive_a0
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::A1) => match &interactive_a1
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::A2) => match &interactive_a2
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::A3) => match &interactive_a3
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::A4) => match &interactive_a4
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        Some(InteractablePinId::A5) => match &interactive_a5
-                        {
-                            InteractablePin::DigitalInput(pin) => state = if pin.is_high() { 0xFF } else { 0 },
-                            InteractablePin::DigitalOutput(pin) => state = if pin.is_set_high() { 0xFF } else { 0 },
-                        }
-                        None => return Err(ReadError::InvalidTag
+                            match (PickedInteractivePin
+                            {
+                                all_pins: &mut interactive_pins,
+                                pin_id: pin,
+                            })
+                            .get_pin_is_high()
+                            {
+                                Ok(is_high) => Ok(Response::GetPinOk
+                                {
+                                    pin,
+                                    is_high,
+                                }),
+                            }
+                        },
+                        None => return Err(ReadError::InvalidRequest
                         {
                             message: "Missing 'pin' field.",
                             path: "get-pin/",
                         }),
                     }
-
-                    // MARK: .   +get-pin
-                    response = Some(Response::GetPin
-                    {
-                        pin: match pin
-                        {
-                            None => "",
-                            Some(InteractablePinId::D2) => "D2",
-                            Some(InteractablePinId::D3) => "D3",
-                            Some(InteractablePinId::D4) => "D4",
-                            Some(InteractablePinId::D5) => "D5",
-                            Some(InteractablePinId::D6) => "D6",
-                            Some(InteractablePinId::D7) => "D7",
-                            Some(InteractablePinId::D8) => "D8",
-                            Some(InteractablePinId::D9) => "D9",
-                            Some(InteractablePinId::D10) => "D10",
-                            Some(InteractablePinId::D11) => "D11",
-                            Some(InteractablePinId::D12) => "D12",
-                            Some(InteractablePinId::D13) => "D13",
-                            Some(InteractablePinId::A0) => "A0",
-                            Some(InteractablePinId::A1) => "A1",
-                            Some(InteractablePinId::A2) => "A2",
-                            Some(InteractablePinId::A3) => "A3",
-                            Some(InteractablePinId::A4) => "A4",
-                            Some(InteractablePinId::A5) => "A5",
-                        },
-                        state,
-                    });
                 }
-                // MARK: /set-pin-mode
-                (Type::Compound, "set-pin-mode") =>
+                // MARK: set-pin
+                (Type::Compound, "set-pin") =>
                 {
-                    enum Mode
-                    {
-                        DigitalInput,
-                        DigitalOutput,
-                        AnalogInput,
-                        AnalogOutput,
-                    }
-
-                    let mut pin: Option<InteractablePinId> = None;
-                    let mut mode: Option<Mode> = None;
+                    let mut pin: Option<InteractivePinID> = None;
+                    let mut is_high: Option<bool> = None;
 
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin-mode/")
-                            .as_ref().map(|x| x.as_ref().map(|(tag, name)| (tag, name.as_str())))?
+                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin/")?
+                            .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            // MARK: .   /pin
-                            Some((Type::String, "pin")) => match collect_string::<8>(&mut reader, "")
-                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                            Some((Type::String, "pin")) =>
                             {
-                                "D2" => pin = Some(InteractablePinId::D2),
-                                "D3" => pin = Some(InteractablePinId::D3),
-                                "D4" => pin = Some(InteractablePinId::D4),
-                                "D5" => pin = Some(InteractablePinId::D5),
-                                "D6" => pin = Some(InteractablePinId::D6),
-                                "D7" => pin = Some(InteractablePinId::D7),
-                                "D8" => pin = Some(InteractablePinId::D8),
-                                "D9" => pin = Some(InteractablePinId::D9),
-                                "D10" => pin = Some(InteractablePinId::D10),
-                                "D11" => pin = Some(InteractablePinId::D11),
-                                "D12" => pin = Some(InteractablePinId::D12),
-                                "D13" => pin = Some(InteractablePinId::D13),
-                                "A0" => pin = Some(InteractablePinId::A0),
-                                "A1" => pin = Some(InteractablePinId::A1),
-                                "A2" => pin = Some(InteractablePinId::A2),
-                                "A3" => pin = Some(InteractablePinId::A3),
-                                "A4" => pin = Some(InteractablePinId::A4),
-                                "A5" => pin = Some(InteractablePinId::A5),
-                                _ => return Err(ReadError::InvalidTag
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "set-pin/pin")?
+                                    .as_str().try_into()
                                 {
-                                    message: "Invalid pin.",
-                                    path: "set-pin-mode/pin",
-                                })
-                            }
-                            // MARK: .   /mode
-                            Some((Type::String, "mode")) => match collect_string::<16>(&mut reader, "")
-                                .as_mut().map(|string| { string.make_ascii_uppercase(); string.as_str() })?
+                                    Ok(id) => pin = Some(id),
+                                    Err(()) => return Err(ReadError::InvalidRequest
+                                    {
+                                        message: "Invalid pin.",
+                                        path: "set-pin/pin",
+                                    })
+                                }
+                            },
+                            Some((Type::Byte, "is-high")) =>
                             {
-                                "input" => mode = Some(Mode::DigitalInput),
-                                "output" => mode = Some(Mode::DigitalOutput),
-                                "digital-input" => mode = Some(Mode::DigitalInput),
-                                "digital-output" => mode = Some(Mode::DigitalOutput),
-                                "analog-input" => mode = Some(Mode::AnalogInput),
-                                "analog-output" => mode = Some(Mode::AnalogOutput),
-                                _ => return Err(ReadError::InvalidTag
-                                {
-                                    message: "Invalid mode.",
-                                    path: "set-pin-mode/mode",
-                                })
-                            }
-                            _ => return Err(ReadError::InvalidTag
+                                is_high = Some(reader.read_byte()? != 0);
+                            },
+                            _ => return Err(ReadError::InvalidRequest
                             {
                                 message: "Invalid field.",
-                                path: "set-pin-mode/",
-                            })
+                                path: "set-pin/",
+                            }),
                         }
                     }
 
-                    const INPUT_ANALOG_ERROR: ReadError = ReadError::StateError
+                    match (pin, is_high)
                     {
-                        message: "This config does not support analog input.",
-                        path: "set-pin-mode",
-                    };
-                    const OUTPUT_ANALOG_ERROR: ReadError = ReadError::StateError
-                    {
-                        message: "This config does not support analog output.",
-                        path: "set-pin-mode",
-                    };
+                        (Some(pin), Some(is_high)) =>
+                        {
+                            match (PickedInteractivePin
+                            {
+                                all_pins: &mut interactive_pins,
+                                pin_id: pin,
+                            })
+                            .set_pin_is_high(is_high)
+                            {
+                                Ok(()) => Ok(Response::SetPinOk
+                                {
+                                    pin,
+                                }),
+                                Err(interactive::PinSetPowerError::IsInput)
+                                    => return Ok(Response::SetPinError
+                                    {
+                                        message: "Cannot set state of pin in input mode.",
+                                        pin,
+                                    }),
+                            }
+                        },
+                        (None, _) => return Err(ReadError::InvalidRequest
+                        {
+                            message: "Missing 'pin' field.",
+                            path: "set-pin/",
+                        }),
+                        (_, None) => return Err(ReadError::InvalidRequest
+                        {
+                            message: "Missing 'is_high' field.",
+                            path: "set-pin/",
+                        }),
+                    }
+                }
+                // MARK: get-pin-mode
+                (Type::Compound, "get-pin-mode") =>
+                {
+                    let mut pin: Option<InteractivePinID> = None;
 
-                    // MARK: .   ->
+                    loop
+                    {
+                        match collect_type_or_end_and_name::<8>(&mut reader, "get-pin-mode/")?
+                            .as_ref().map(|(tag, name)| (tag, name.as_str()))
+                        {
+                            None => break,
+                            Some((Type::String, "pin")) =>
+                            {
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "get-pin-mode/pin")?
+                                    .as_str().try_into()
+                                {
+                                    Ok(id) => pin = Some(id),
+                                    Err(()) => return Err(ReadError::InvalidRequest
+                                    {
+                                        message: "Invalid pin.",
+                                        path: "get-pin-mode/pin",
+                                    })
+                                }
+                            },
+                            _ => return Err(ReadError::InvalidRequest
+                            {
+                                message: "Invalid field.",
+                                path: "get-pin-mode/",
+                            }),
+                        }
+                    }
+
+                    match pin
+                    {
+                        Some(pin) =>
+                        {
+                            match (PickedInteractivePin
+                            {
+                                all_pins: &mut interactive_pins,
+                                pin_id: pin,
+                            })
+                            .get_pin_mode()
+                            {
+                                Ok(mode) => Ok(Response::GetPinModeOk
+                                {
+                                    pin,
+                                    mode: mode.into(),
+                                }),
+                            }
+                        },
+                        None => return Err(ReadError::InvalidRequest
+                        {
+                            message: "Missing 'pin' field.",
+                            path: "get-pin-mode/",
+                        }),
+                    }
+                }
+                // MARK: set-pin-mode
+                (Type::Compound, "set-pin-mode") =>
+                {
+                    let mut pin: Option<InteractivePinID> = None;
+                    let mut mode: Option<interactive::PinMode> = None;
+
+                    loop
+                    {
+                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin-mode/")?
+                            .as_ref().map(|(tag, name)| (tag, name.as_str()))
+                        {
+                            None => break,
+                            Some((Type::String, "pin")) =>
+                            {
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "set-pin-mode/pin")?
+                                    .as_str().try_into()
+                                {
+                                    Ok(id) => pin = Some(id),
+                                    Err(()) => return Err(ReadError::InvalidRequest
+                                    {
+                                        message: "Invalid pin.",
+                                        path: "set-pin-mode/pin",
+                                    })
+                                }
+                            },
+                            Some((Type::String, "mode")) =>
+                            {
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "set-pin-mode/pin")?
+                                    .as_str().try_into()
+                                {
+                                    Ok(id) => mode = Some(id),
+                                    Err(()) => return Err(ReadError::InvalidRequest
+                                    {
+                                        message: "Invalid mode.",
+                                        path: "set-pin-mode/mode",
+                                    })
+                                }
+                            },
+                            _ => return Err(ReadError::InvalidRequest
+                            {
+                                message: "Invalid field.",
+                                path: "set-pin-mode/",
+                            }),
+                        }
+                    }
+
                     match (pin, mode)
                     {
-                        (Some(InteractablePinId::D2), Some(mode)) => match (&mut interactive_d2, mode)
+                        (Some(pin), Some(mode)) =>
                         {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d2 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d2 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
+                            match (PickedInteractivePin
+                            {
+                                all_pins: &mut interactive_pins,
+                                pin_id: pin,
+                            })
+                            .set_pin_mode(mode)
+                            {
+                                Ok(()) => Ok(Response::SetPinModeOk
+                                {
+                                    pin,
+                                }),
+                            }
                         },
-                        (Some(InteractablePinId::D3), Some(mode)) => match (&mut interactive_d3, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d3 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d3 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D4), Some(mode)) => match (&mut interactive_d4, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d4 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d4 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D5), Some(mode)) => match (&mut interactive_d5, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d5 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d5 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D6), Some(mode)) => match (&mut interactive_d6, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d6 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d6 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D7), Some(mode)) => match (&mut interactive_d7, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d7 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d7 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D8), Some(mode)) => match (&mut interactive_d8, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d8 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d8 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D9), Some(mode)) => match (&mut interactive_d9, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d9 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d9 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D10), Some(mode)) => match (&mut interactive_d10, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d10 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d10 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D11), Some(mode)) => match (&mut interactive_d11, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d11 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d11 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D12), Some(mode)) => match (&mut interactive_d12, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d12 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d12 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::D13), Some(mode)) => match (&mut interactive_d13, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_d13 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_d13 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::A0), Some(mode)) => match (&mut interactive_a0, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_a0 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_a0 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::A1), Some(mode)) => match (&mut interactive_a1, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_a1 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_a1 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::A2), Some(mode)) => match (&mut interactive_a2, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_a2 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_a2 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::A3), Some(mode)) => match (&mut interactive_a3, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_a3 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_a3 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::A4), Some(mode)) => match (&mut interactive_a4, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_a4 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_a4 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (Some(InteractablePinId::A5), Some(mode)) => match (&mut interactive_a5, mode)
-                        {
-                            (InteractablePin::DigitalInput(_), Mode::DigitalInput) => (),
-                            (InteractablePin::DigitalInput(pin), Mode::DigitalOutput) => interactive_a5 = InteractablePin::DigitalOutput(core::ptr::read(pin).into_output()),
-                            (InteractablePin::DigitalOutput(_), Mode::DigitalOutput) => (),
-                            (InteractablePin::DigitalOutput(pin), Mode::DigitalInput) => interactive_a5 = InteractablePin::DigitalInput(core::ptr::read(pin).into_pull_up_input()),
-                            (_, Mode::AnalogInput) => return Err(INPUT_ANALOG_ERROR),
-                            (_, Mode::AnalogOutput) => return Err(OUTPUT_ANALOG_ERROR),
-                        },
-                        (None, _) => return Err(ReadError::InvalidTag
+                        (None, _) => return Err(ReadError::InvalidRequest
                         {
                             message: "Missing 'pin' field.",
                             path: "set-pin-mode/",
                         }),
-                        (_, None) => return Err(ReadError::InvalidTag
+                        (_, None) => return Err(ReadError::InvalidRequest
                         {
-                            message: "Missing 'state' field.",
+                            message: "Missing 'mode' field.",
                             path: "set-pin-mode/",
                         }),
                     }
                 }
-                _ => return Err(ReadError::InvalidTag
+                _ => return Err(ReadError::InvalidRequest
                 {
                     message: "Invalid root tag.",
                     path: "",
                 })
             }
-
-            // MARK: Response
-            if let Some(response) = response.take()
+        })
+        // MARK: Response
+        {
+            // MARK: GetConfig
+            Ok(Response::GetConfig) => infallible_scope(|| unsafe
             {
-                infallible_scope(||
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+get-config")?;
                 {
-                    match response
+                    writer.write_type(Type::String)?;
+                    writer.write_name("name")?;
+                    writer.write_string("Arduino Uno")?;
+
+                    writer.write_type(Type::List)?;
+                    writer.write_name("pins")?;
+                    writer.write_element_type(ElementType::Compound)?;
+                    writer.write_len(18)?;
                     {
-                        Response::SetPinSuccess =>
+                        let mut write_pin = |
+                            name: &str,
+                            display: &str,
+                            modes: &[&str]| -> Result<(), Infallible>
                         {
-                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                            writer.write_type(Type::Compound)?;
-                            writer.write_name("+set-pin")?;
+                            writer.write_type(Type::String)?;
+                            writer.write_name("name")?;
+                            writer.write_string(name)?;
+
+                            writer.write_type(Type::String)?;
+                            writer.write_name("display")?;
+                            writer.write_string(display)?;
+
+                            writer.write_type(Type::List)?;
+                            writer.write_name("modes")?;
+                            writer.write_element_type(ElementType::String)?;
+                            writer.write_len(modes.len() as u32)?;
+                            for mode in modes
                             {
-                                writer.write_end()?;
+                                writer.write_string(mode)?;
                             }
-                        },
-                        Response::SetPinModeSuccess =>
-                        {
-                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                            writer.write_type(Type::Compound)?;
-                            writer.write_name("+set-pin-mode")?;
-                            {
-                                writer.write_end()?;
-                            }
-                        },
-                        Response::GetPin { pin, state } =>
-                        {
-                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                            writer.write_type(Type::Compound)?;
-                            writer.write_name("+get-pin")?;
-                            {
-                                writer.write_type(Type::String)?;
-                                writer.write_name("pin")?;
-                                writer.write_string(pin)?;
 
-                                writer.write_type(Type::Byte)?;
-                                writer.write_name("state")?;
-                                writer.write_ubyte(state)?;
+                            Ok(())
+                        };
 
-                                writer.write_end()?;
-                            }
-                        },
-                        Response::GetConfig =>
-                        {
-                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                            writer.write_type(Type::Compound)?;
-                            writer.write_name("+get-config")?;
-                            {
-                                writer.write_type(Type::String)?;
-                                writer.write_name("name")?;
-                                writer.write_string("Arduino Uno")?;
+                        write_pin("D2", "2", &["digital-input", "digital-output"])?;
+                        write_pin("D3", "~3", &["digital-input", "digital-output"])?;
+                        write_pin("D4", "4", &["digital-input", "digital-output"])?;
+                        write_pin("D5", "~5", &["digital-input", "digital-output"])?;
+                        write_pin("D6", "~6", &["digital-input", "digital-output"])?;
+                        write_pin("D7", "7", &["digital-input", "digital-output"])?;
 
-                                writer.write_type(Type::List)?;
-                                writer.write_name("pins")?;
-                                writer.write_element_type(ElementType::Compound)?;
-                                writer.write_len(18)?;
-                                {
-                                    let mut write_pin = |
-                                        name: &str,
-                                        display: &str,
-                                        modes: &[&str]| -> Result<(), Infallible>
-                                    {
-                                        writer.write_type(Type::String)?;
-                                        writer.write_name("name")?;
-                                        writer.write_string(name)?;
+                        write_pin("D8", "8", &["digital-input", "digital-output"])?;
+                        write_pin("D9", "~9", &["digital-input", "digital-output"])?;
+                        write_pin("D10", "~10", &["digital-input", "digital-output"])?;
+                        write_pin("D11", "~11", &["digital-input", "digital-output"])?;
+                        write_pin("D12", "12", &["digital-input", "digital-output"])?;
+                        write_pin("D13", "13", &["digital-input", "digital-output"])?;
 
-                                        writer.write_type(Type::String)?;
-                                        writer.write_name("display")?;
-                                        writer.write_string(display)?;
-
-                                        writer.write_type(Type::List)?;
-                                        writer.write_name("modes")?;
-                                        writer.write_element_type(ElementType::String)?;
-                                        writer.write_len(modes.len() as u32)?;
-                                        for mode in modes
-                                        {
-                                            writer.write_string(mode)?;
-                                        }
-
-                                        Ok(())
-                                    };
-
-                                    write_pin("D2", "2", &["digital-input", "digital-output"])?;
-                                    write_pin("D3", "~3", &["digital-input", "digital-output"])?;
-                                    write_pin("D4", "4", &["digital-input", "digital-output"])?;
-                                    write_pin("D5", "~5", &["digital-input", "digital-output"])?;
-                                    write_pin("D6", "~6", &["digital-input", "digital-output"])?;
-                                    write_pin("D7", "7", &["digital-input", "digital-output"])?;
-
-                                    write_pin("D8", "8", &["digital-input", "digital-output"])?;
-                                    write_pin("D9", "~9", &["digital-input", "digital-output"])?;
-                                    write_pin("D10", "~10", &["digital-input", "digital-output"])?;
-                                    write_pin("D11", "~11", &["digital-input", "digital-output"])?;
-                                    write_pin("D12", "12", &["digital-input", "digital-output"])?;
-                                    write_pin("D13", "13", &["digital-input", "digital-output"])?;
-
-                                    write_pin("A0", "A0", &["digital-input", "digital-output"])?;
-                                    write_pin("A1", "A1", &["digital-input", "digital-output"])?;
-                                    write_pin("A2", "A2", &["digital-input", "digital-output"])?;
-                                    write_pin("A3", "A3", &["digital-input", "digital-output"])?;
-                                    write_pin("A4", "A4", &["digital-input", "digital-output"])?;
-                                    write_pin("A5", "A5", &["digital-input", "digital-output"])?;
-                                }
-
-                                writer.write_end()?;
-                            }
-                        }
+                        write_pin("A0", "A0", &["digital-input", "digital-output"])?;
+                        write_pin("A1", "A1", &["digital-input", "digital-output"])?;
+                        write_pin("A2", "A2", &["digital-input", "digital-output"])?;
+                        write_pin("A3", "A3", &["digital-input", "digital-output"])?;
+                        write_pin("A4", "A4", &["digital-input", "digital-output"])?;
+                        write_pin("A5", "A5", &["digital-input", "digital-output"])?;
                     }
 
-                    Ok(())
-                });
-            }
-
-            Ok(())
-        })
-        {
-            infallible_scope(|| unsafe
-            {
-                match error
-                {
-                    ReadError::FoundControlByte(byte) =>
-                    {
-                        block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                        block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                        writer.write_type(Type::Compound)?;
-                        writer.write_name("error")?;
-                        {
-                            writer.write_type(Type::String)?;
-                            writer.write_name("type")?;
-                            writer.write_string(
-                                "control-char")?;
-
-                            writer.write_type(Type::String)?;
-                            writer.write_name("message")?;
-                            writer.write_string(
-                                "Control char received mid-message.")?;
-
-                            writer.write_type(Type::Byte)?;
-                            writer.write_name("byte")?;
-                            writer.write_ubyte(byte)?;
-
-                            writer.write_end()?;
-                        }
-                    },
-                    ReadError::TimedOut =>
-                    {
-                        block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                        block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                        writer.write_type(Type::Compound)?;
-                        writer.write_name("error")?;
-                        {
-                            writer.write_type(Type::String)?;
-                            writer.write_name("type")?;
-                            writer.write_string(
-                                "timeout")?;
-
-                            writer.write_type(Type::String)?;
-                            writer.write_name("message")?;
-                            writer.write_string(
-                                "Message reading timed out.")?;
-
-                            writer.write_end()?;
-                        }
-                    },
-                    ReadError::InvalidTag { message, path } =>
-                    {
-                        block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                        block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                        writer.write_type(Type::Compound)?;
-                        writer.write_name("error")?;
-                        {
-                            writer.write_type(Type::String)?;
-                            writer.write_name("type")?;
-                            writer.write_string(
-                                "invalid-tag")?;
-
-                            writer.write_type(Type::String)?;
-                            writer.write_name("message")?;
-                            writer.write_string(message)?;
-
-                            writer.write_type(Type::String)?;
-                            writer.write_name("path")?;
-                            writer.write_string(path)?;
-
-                            writer.write_end()?;
-                        }
-                    },
-                    ReadError::StateError { message, path } =>
-                    {
-                        block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                        block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                        writer.write_type(Type::Compound)?;
-                        writer.write_name("error")?;
-                        {
-                            writer.write_type(Type::String)?;
-                            writer.write_name("type")?;
-                            writer.write_string(
-                                "invalid-command")?;
-
-                            writer.write_type(Type::String)?;
-                            writer.write_name("message")?;
-                            writer.write_string(message)?;
-
-                            writer.write_type(Type::String)?;
-                            writer.write_name("path")?;
-                            writer.write_string(path)?;
-
-                            writer.write_end()?;
-                        }
-                    },
+                    writer.write_end()?;
                 }
 
                 Ok(())
-            });
-            continue;
+            }),
+            // MARK: GetPinOk
+            Ok(Response::GetPinOk { pin, is_high }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+get-pin")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_type(Type::Byte)?;
+                    writer.write_name("is-high")?;
+                    writer.write_bool(is_high)?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: GetPinError
+            Ok(Response::GetPinError { pin, message }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+get-pin")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("error")?;
+                    writer.write_string(message)?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: SetPinOk
+            Ok(Response::SetPinOk { pin }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+set-pin")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: SetPinError
+            Ok(Response::SetPinError { pin, message }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+set-pin")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("error")?;
+                    writer.write_string(message)?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: GetPinModeOk
+            Ok(Response::GetPinModeOk { pin, mode }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+get-pin-mode")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("mode")?;
+                    writer.write_string(mode.into())?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: GetPinModeError
+            Ok(Response::GetPinModeError { pin, message }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+get-pin-mode")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("error")?;
+                    writer.write_string(message)?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: SetPinModeOk
+            Ok(Response::SetPinModeOk { pin }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+set-pin-mode")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: SetPinModeError
+            Ok(Response::SetPinModeError { pin, message }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("+set-pin-mode")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("pin")?;
+                    writer.write_string(pin.into())?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("error")?;
+                    writer.write_string(message)?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: TimedOut
+            Err(ReadError::TimedOut) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("error")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("type")?;
+                    writer.write_string(
+                        "timeout")?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("message")?;
+                    writer.write_string(
+                        "Timed out while reading command.")?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: FoundControlByte
+            Err(ReadError::FoundControlByte(_)) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("error")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("type")?;
+                    writer.write_string(
+                        "control-byte")?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("message")?;
+                    writer.write_string(
+                        "Found control byte while reading command.")?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
+            // MARK: InvalidRequest
+            Err(ReadError::InvalidRequest { message, path }) => infallible_scope(|| unsafe
+            {
+                block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                writer.write_type(Type::Compound)?;
+                writer.write_name("error")?;
+                {
+                    writer.write_type(Type::String)?;
+                    writer.write_name("type")?;
+                    writer.write_string(
+                        "invalid-request")?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("message")?;
+                    writer.write_string(message)?;
+
+                    writer.write_type(Type::String)?;
+                    writer.write_name("path")?;
+                    writer.write_string(path)?;
+
+                    writer.write_end()?;
+                }
+
+                Ok(())
+            }),
         }
     }
 }
 
-fn infallible_scope(f: impl FnOnce() -> Result<(), Infallible>)
+fn infallible_scope<T>(f: impl FnOnce() -> Result<T, Infallible>) -> T
 {
     f().unwrap_infallible()
 }
 
-fn try_scope<E>(f: impl FnOnce() -> Result<(), E>) -> Result<(), E>
+fn try_scope<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
 {
     f()
 }
@@ -1109,7 +1149,7 @@ unsafe fn collect_type_or_end_and_name<const N: usize>(
         Err(error) =>
         {
             reader.discard(error.byte_count)?;
-            return Err(ReadError::InvalidTag
+            return Err(ReadError::InvalidRequest
             {
                 message: "Type is not valid.",
                 path: error_path,
@@ -1131,7 +1171,7 @@ unsafe fn collect_type_and_name<const N: usize>(
         Err(error) =>
         {
             reader.discard(error.byte_count)?;
-            return Err(ReadError::InvalidTag
+            return Err(ReadError::InvalidRequest
             {
                 message: "Type is not valid.",
                 path: error_path,
@@ -1151,7 +1191,7 @@ unsafe fn collect_name<const N: usize>(
 
     if len > N as u16
     {
-        return Err(ReadError::InvalidTag
+        return Err(ReadError::InvalidRequest
         {
             message: "Name is too long.",
             path: error_path,
@@ -1165,7 +1205,7 @@ unsafe fn collect_name<const N: usize>(
         let Ok(()) = bytes.push(reader.read_ubyte()?)
         else
         {
-            return Err(ReadError::InvalidTag
+            return Err(ReadError::InvalidRequest
             {
                 message: "Name is too long.",
                 path: error_path,
@@ -1176,7 +1216,7 @@ unsafe fn collect_name<const N: usize>(
     match heapless::String::from_utf8(bytes)
     {
         Ok(utf8) => Ok(utf8),
-        Err(_) => return Err(ReadError::InvalidTag
+        Err(_) => return Err(ReadError::InvalidRequest
         {
             message: "Name is not valid UTF-8.",
             path: error_path,
@@ -1193,7 +1233,7 @@ unsafe fn collect_string<const N: usize>(
 
     if len > N as u16
     {
-        return Err(ReadError::InvalidTag
+        return Err(ReadError::InvalidRequest
         {
             message: "String is too long.",
             path: error_path,
@@ -1207,7 +1247,7 @@ unsafe fn collect_string<const N: usize>(
         let Ok(()) = bytes.push(reader.read_ubyte()?)
         else
         {
-            return Err(ReadError::InvalidTag
+            return Err(ReadError::InvalidRequest
             {
                 message: "String is too long.",
                 path: error_path,
@@ -1218,7 +1258,7 @@ unsafe fn collect_string<const N: usize>(
     match heapless::String::from_utf8(bytes)
     {
         Ok(utf8) => Ok(utf8),
-        Err(_) => return Err(ReadError::InvalidTag
+        Err(_) => return Err(ReadError::InvalidRequest
         {
             message: "String is not valid UTF-8.",
             path: error_path,
