@@ -20,7 +20,7 @@ import { StringDeserializer, StringPayloadDeserializer, StringPayloadSerializer,
 */ export class CompoundTag extends Tag
 {
     /**
-    @param {Record<string, Tag> | Map<string, Tag>} [values]
+    @param {Iterable<[string, Tag]>} [values]
     @public*/ constructor(values)
     {
         super();
@@ -29,19 +29,10 @@ import { StringDeserializer, StringPayloadDeserializer, StringPayloadSerializer,
         @type {Map<string, Tag>}
         @private*/ this._value = new Map();
 
-        if (values instanceof Map)
+        if (values !== undefined)
         {
             for (const [key, value] of values)
                 this._value.set(key, value);
-        }
-        else
-        {
-            for (const key in values)
-            {
-                const tag = values[key];
-                if (tag instanceof Tag)
-                    this._value.set(key, tag);
-            }
         }
     }
 

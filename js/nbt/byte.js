@@ -1,6 +1,6 @@
 import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Deserializer, DeserializerError, PayloadDeserializer, PayloadSerializer, Serializer, Tag } from "./base.js";
 /**
-@import { SerializationGenerator, DeserializationGenerator, SerializationConfig, DeserializationConfig } from "./base.js"
+@import { SerializationConfig, DeserializationConfig } from "./base.js"
 */
 
 // MARK: ByteTag
@@ -9,10 +9,16 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
 */ export class ByteTag extends Tag
 {
     /**
-    @param {number} value
+    @param {number | boolean} value
     @public*/ constructor(value)
     {
         super();
+
+        switch (value)
+        {
+            case true: value = 1;
+            case false: value = 0;
+        }
 
         /**
         @type {number}
@@ -30,6 +36,15 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
         this._value = value & 0xFF;
         if ((this._value & 0x80) !== 0)
             this._value -= 0x80;
+    }
+
+    /**
+    @returns {boolean}
+    @public*/ get asBoolean() { return this._value !== 0 }
+    /**
+    @public*/ set asBoolean(value)
+    {
+        this._value = value ? 1 : 0;
     }
 }
 
