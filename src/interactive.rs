@@ -26,7 +26,7 @@ pub enum PinPowerChangeError
 
 pub trait PinDigitalInteractionChanges
 {
-    fn detect_pin_changed(&mut self) -> Result<bool, PinPowerChangeError>;
+    fn detect_pin_change(&mut self) -> Result<Option<bool>, PinPowerChangeError>;
 }
 
 pub enum PinMode
@@ -115,7 +115,7 @@ impl<PIN: PinOps> PinDigitalInteraction for Pin<PIN>
 
 impl<PIN: PinOps> PinDigitalInteractionChanges for Pin<PIN>
 {
-    fn detect_pin_changed(&mut self) -> Result<bool, PinPowerChangeError>
+    fn detect_pin_change(&mut self) -> Result<Option<bool>, PinPowerChangeError>
     {
         match &mut self._state
         {
@@ -125,7 +125,7 @@ impl<PIN: PinOps> PinDigitalInteractionChanges for Pin<PIN>
                 let has_changed = is_high != *was_high;
                 *was_high = is_high;
 
-                Ok(has_changed)
+                if has_changed { Ok(Some(is_high)) } else { Ok(None) }
             },
             _PinState::DigitalOutput { pin: _ }
                 => Err(PinPowerChangeError::IsOutput),

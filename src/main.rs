@@ -13,16 +13,14 @@ use interactive::PinDigitalInteraction;
 use interactive::PinDigitalInteractionChanges;
 use interactive::PinModeInteraction;
 use nb::block;
-use nbt::reader::ReadRaw;
-use nbt::ElementType;
+use nbt::ReadRaw;
+use nbt::WriteRaw;
 mod panic_handler;
 mod nbt;
 mod interactive;
 
 use core::convert::Infallible;
-
-use nbt::writer::WriteRaw;
-use nbt::Type;
+use core::panic::Location;
 
 impl interactive::PinMode
 {
@@ -214,28 +212,28 @@ impl<'p> interactive::PinDigitalInteraction for PickedInteractivePin<'p>
 
 impl<'p> interactive::PinDigitalInteractionChanges for PickedInteractivePin<'p>
 {
-    fn detect_pin_changed(&mut self) -> Result<bool, interactive::PinPowerChangeError>
+    fn detect_pin_change(&mut self) -> Result<Option<bool>, interactive::PinPowerChangeError>
     {
         match self.pin_id
         {
-            InteractivePinID::D2 => self.all_pins.d2.detect_pin_changed(),
-            InteractivePinID::D3 => self.all_pins.d3.detect_pin_changed(),
-            InteractivePinID::D4 => self.all_pins.d4.detect_pin_changed(),
-            InteractivePinID::D5 => self.all_pins.d5.detect_pin_changed(),
-            InteractivePinID::D6 => self.all_pins.d6.detect_pin_changed(),
-            InteractivePinID::D7 => self.all_pins.d7.detect_pin_changed(),
-            InteractivePinID::D8 => self.all_pins.d8.detect_pin_changed(),
-            InteractivePinID::D9 => self.all_pins.d9.detect_pin_changed(),
-            InteractivePinID::D10 => self.all_pins.d10.detect_pin_changed(),
-            InteractivePinID::D11 => self.all_pins.d11.detect_pin_changed(),
-            InteractivePinID::D12 => self.all_pins.d12.detect_pin_changed(),
-            InteractivePinID::D13 => self.all_pins.d13.detect_pin_changed(),
-            InteractivePinID::A0 => self.all_pins.a0.detect_pin_changed(),
-            InteractivePinID::A1 => self.all_pins.a1.detect_pin_changed(),
-            InteractivePinID::A2 => self.all_pins.a2.detect_pin_changed(),
-            InteractivePinID::A3 => self.all_pins.a3.detect_pin_changed(),
-            InteractivePinID::A4 => self.all_pins.a4.detect_pin_changed(),
-            InteractivePinID::A5 => self.all_pins.a5.detect_pin_changed(),
+            InteractivePinID::D2 => self.all_pins.d2.detect_pin_change(),
+            InteractivePinID::D3 => self.all_pins.d3.detect_pin_change(),
+            InteractivePinID::D4 => self.all_pins.d4.detect_pin_change(),
+            InteractivePinID::D5 => self.all_pins.d5.detect_pin_change(),
+            InteractivePinID::D6 => self.all_pins.d6.detect_pin_change(),
+            InteractivePinID::D7 => self.all_pins.d7.detect_pin_change(),
+            InteractivePinID::D8 => self.all_pins.d8.detect_pin_change(),
+            InteractivePinID::D9 => self.all_pins.d9.detect_pin_change(),
+            InteractivePinID::D10 => self.all_pins.d10.detect_pin_change(),
+            InteractivePinID::D11 => self.all_pins.d11.detect_pin_change(),
+            InteractivePinID::D12 => self.all_pins.d12.detect_pin_change(),
+            InteractivePinID::D13 => self.all_pins.d13.detect_pin_change(),
+            InteractivePinID::A0 => self.all_pins.a0.detect_pin_change(),
+            InteractivePinID::A1 => self.all_pins.a1.detect_pin_change(),
+            InteractivePinID::A2 => self.all_pins.a2.detect_pin_change(),
+            InteractivePinID::A3 => self.all_pins.a3.detect_pin_change(),
+            InteractivePinID::A4 => self.all_pins.a4.detect_pin_change(),
+            InteractivePinID::A5 => self.all_pins.a5.detect_pin_change(),
         }
     }
 }
@@ -298,7 +296,12 @@ enum ReadError
 {
     FoundControlByte(u8),
     TimedOut,
-    InvalidRequest { message: &'static str, path: &'static str },
+    InvalidRequest
+    {
+        message: &'static str,
+        path: &'static str,
+        location: &'static Location<'static>,
+    },
 }
 
 impl From<&mut ReadError> for ReadError
@@ -351,7 +354,7 @@ fn process() -> !
     const CONTROL_BYTE: u8 = b'';
     const START_TEXT_BYTE: u8 = b'';
 
-    let mut reader = nbt::reader::ClosureRawReader::<ReadError, _>::new(
+    let mut reader = nbt::ClosureRawReader::<ReadError, _>::new(
         nbt::Endian::Little,
         ||
         {
@@ -393,7 +396,7 @@ fn process() -> !
             }
         });
 
-    let mut writer = nbt::writer::ClosureRawWriter::<Infallible, _>::new(
+    let mut writer = nbt::ClosureRawWriter::<Infallible, _>::new(
         nbt::Endian::Little,
         |byte|
         {
@@ -425,14 +428,14 @@ fn process() -> !
                 {
                     block!(raw_serial_writer.write(CONTROL_BYTE))?;
                     block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                    writer.write_type(Type::Compound)?;
+                    writer.write_type(nbt::Type::Compound)?;
                     writer.write_name("pin-changed")?;
                     {
-                        writer.write_type(Type::String)?;
+                        writer.write_type(nbt::Type::String)?;
                         writer.write_name("pin")?;
                         writer.write_string(pin.into())?;
 
-                        writer.write_type(Type::Byte)?;
+                        writer.write_type(nbt::Type::Byte)?;
                         writer.write_name("is-high")?;
                         writer.write_bool(now_is_high)?;
 
@@ -445,12 +448,12 @@ fn process() -> !
 
             let mut try_write_change = |pin: InteractivePinID|
             {
-                if let Ok(is_high) = (PickedInteractivePin
+                if let Ok(Some(is_high)) = (PickedInteractivePin
                     {
                         all_pins: &mut interactive_pins,
                         pin_id: pin,
                     })
-                    .detect_pin_changed()
+                    .detect_pin_change()
                 {
                     write_change(pin, is_high)
                 }
@@ -490,15 +493,15 @@ fn process() -> !
                         {
                             block!(raw_serial_writer.write(CONTROL_BYTE))?;
                             block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                            writer.write_type(Type::Compound)?;
+                            writer.write_type(nbt::Type::Compound)?;
                             writer.write_name("error")?;
                             {
-                                writer.write_type(Type::String)?;
+                                writer.write_type(nbt::Type::String)?;
                                 writer.write_name("type")?;
                                 writer.write_string(
                                     "control-byte")?;
 
-                                writer.write_type(Type::String)?;
+                                writer.write_type(nbt::Type::String)?;
                                 writer.write_name("message")?;
                                 writer.write_string(
                                     "Invalid control byte received.")?;
@@ -518,27 +521,67 @@ fn process() -> !
         enum Response
         {
             GetConfig,
-            GetPinOk { pin: InteractivePinID, is_high: bool },
-            GetPinError { pin: InteractivePinID, message: &'static str },
-            SetPinOk { pin: InteractivePinID },
-            SetPinError { pin: InteractivePinID, message: &'static str },
-            GetPinModeOk { pin: InteractivePinID, mode: &'static str },
-            GetPinModeError { pin: InteractivePinID, message: &'static str },
-            SetPinModeOk { pin: InteractivePinID },
-            SetPinModeError { pin: InteractivePinID, message: &'static str },
+            GetPinOk
+            {
+                pin: InteractivePinID,
+                is_high: bool,
+            },
+            GetPinError
+            {
+                pin: InteractivePinID,
+                message: &'static str,
+                location: &'static Location<'static>,
+            },
+            SetPinOk
+            {
+                pin: InteractivePinID,
+            },
+            SetPinError
+            {
+                pin: InteractivePinID,
+                message: &'static str,
+                location: &'static Location<'static>,
+            },
+            GetPinModeOk
+            {
+                pin: InteractivePinID,
+                mode: &'static str,
+            },
+            GetPinModeError
+            {
+                pin: InteractivePinID,
+                message: &'static str,
+                location: &'static Location<'static>,
+            },
+            SetPinModeOk
+            {
+                pin: InteractivePinID,
+            },
+            SetPinModeError
+            {
+                pin: InteractivePinID,
+                message: &'static str,
+                location: &'static Location<'static>,
+            },
         }
 
         match try_scope(|| unsafe
         {
-            match collect_type_and_name::<16>(&mut reader, "")
+            match collect_type_and_name::<16>(
+                &mut reader,
+                "",
+                Location::caller())
                 .as_ref().map(|(tag, name)| (tag, name.as_str()))?
             {
                 // MARK: get-config
-                (Type::Compound, "get-config") =>
+                (nbt::Type::Compound, "get-config") =>
                 {
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "get-config/")?
+                        match collect_type_or_end_and_name::<8>(
+                            &mut reader,
+                            "get-config/",
+                            Location::caller())?
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
@@ -546,6 +589,7 @@ fn process() -> !
                             {
                                 message: "Invalid field.",
                                 path: "get-config/",
+                                location: Location::caller(),
                             })
                         }
                     }
@@ -553,19 +597,25 @@ fn process() -> !
                     Ok(Response::GetConfig)
                 }
                 // MARK: get-pin
-                (Type::Compound, "get-pin") =>
+                (nbt::Type::Compound, "get-pin") =>
                 {
                     let mut pin: Option<InteractivePinID> = None;
 
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "get-pin/")?
+                        match collect_type_or_end_and_name::<8>(
+                            &mut reader,
+                            "get-pin/",
+                            Location::caller())?
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((Type::String, "pin")) =>
+                            Some((nbt::Type::String, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "get-pin/pin")?
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
+                                    &mut reader,
+                                    "get-pin/pin",
+                                    Location::caller())?
                                     .as_str().try_into()
                                 {
                                     Ok(id) => pin = Some(id),
@@ -573,6 +623,7 @@ fn process() -> !
                                     {
                                         message: "Invalid pin.",
                                         path: "get-pin/pin",
+                                        location: Location::caller(),
                                     })
                                 }
                             },
@@ -580,6 +631,7 @@ fn process() -> !
                             {
                                 message: "Invalid field.",
                                 path: "get-pin/",
+                                location: Location::caller(),
                             }),
                         }
                     }
@@ -606,24 +658,31 @@ fn process() -> !
                         {
                             message: "Missing 'pin' field.",
                             path: "get-pin/",
+                            location: Location::caller(),
                         }),
                     }
                 }
                 // MARK: set-pin
-                (Type::Compound, "set-pin") =>
+                (nbt::Type::Compound, "set-pin") =>
                 {
                     let mut pin: Option<InteractivePinID> = None;
                     let mut is_high: Option<bool> = None;
 
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin/")?
+                        match collect_type_or_end_and_name::<8>(
+                            &mut reader,
+                            "set-pin/",
+                            Location::caller())?
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((Type::String, "pin")) =>
+                            Some((nbt::Type::String, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "set-pin/pin")?
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
+                                    &mut reader,
+                                    "set-pin/pin",
+                                    Location::caller())?
                                     .as_str().try_into()
                                 {
                                     Ok(id) => pin = Some(id),
@@ -631,10 +690,11 @@ fn process() -> !
                                     {
                                         message: "Invalid pin.",
                                         path: "set-pin/pin",
+                                        location: Location::caller(),
                                     })
                                 }
                             },
-                            Some((Type::Byte, "is-high")) =>
+                            Some((nbt::Type::Byte, "is-high")) =>
                             {
                                 is_high = Some(reader.read_byte()? != 0);
                             },
@@ -642,6 +702,7 @@ fn process() -> !
                             {
                                 message: "Invalid field.",
                                 path: "set-pin/",
+                                location: Location::caller(),
                             }),
                         }
                     }
@@ -666,6 +727,7 @@ fn process() -> !
                                     {
                                         message: "Cannot set state of pin in input mode.",
                                         pin,
+                                        location: Location::caller(),
                                     }),
                             }
                         },
@@ -673,28 +735,36 @@ fn process() -> !
                         {
                             message: "Missing 'pin' field.",
                             path: "set-pin/",
+                            location: Location::caller(),
                         }),
                         (_, None) => return Err(ReadError::InvalidRequest
                         {
                             message: "Missing 'is_high' field.",
                             path: "set-pin/",
+                            location: Location::caller(),
                         }),
                     }
                 }
                 // MARK: get-pin-mode
-                (Type::Compound, "get-pin-mode") =>
+                (nbt::Type::Compound, "get-pin-mode") =>
                 {
                     let mut pin: Option<InteractivePinID> = None;
 
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "get-pin-mode/")?
+                        match collect_type_or_end_and_name::<8>(
+                            &mut reader,
+                            "get-pin-mode/",
+                            Location::caller())?
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((Type::String, "pin")) =>
+                            Some((nbt::Type::String, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "get-pin-mode/pin")?
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
+                                    &mut reader,
+                                    "get-pin-mode/pin",
+                                    Location::caller())?
                                     .as_str().try_into()
                                 {
                                     Ok(id) => pin = Some(id),
@@ -702,6 +772,7 @@ fn process() -> !
                                     {
                                         message: "Invalid pin.",
                                         path: "get-pin-mode/pin",
+                                        location: Location::caller(),
                                     })
                                 }
                             },
@@ -709,6 +780,7 @@ fn process() -> !
                             {
                                 message: "Invalid field.",
                                 path: "get-pin-mode/",
+                                location: Location::caller(),
                             }),
                         }
                     }
@@ -735,24 +807,31 @@ fn process() -> !
                         {
                             message: "Missing 'pin' field.",
                             path: "get-pin-mode/",
+                            location: Location::caller(),
                         }),
                     }
                 }
                 // MARK: set-pin-mode
-                (Type::Compound, "set-pin-mode") =>
+                (nbt::Type::Compound, "set-pin-mode") =>
                 {
                     let mut pin: Option<InteractivePinID> = None;
                     let mut mode: Option<interactive::PinMode> = None;
 
                     loop
                     {
-                        match collect_type_or_end_and_name::<8>(&mut reader, "set-pin-mode/")?
+                        match collect_type_or_end_and_name::<8>(
+                            &mut reader,
+                            "set-pin-mode/",
+                            Location::caller())?
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((Type::String, "pin")) =>
+                            Some((nbt::Type::String, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "set-pin-mode/pin")?
+                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
+                                    &mut reader,
+                                    "set-pin-mode/pin",
+                                    Location::caller())?
                                     .as_str().try_into()
                                 {
                                     Ok(id) => pin = Some(id),
@@ -760,12 +839,16 @@ fn process() -> !
                                     {
                                         message: "Invalid pin.",
                                         path: "set-pin-mode/pin",
+                                        location: Location::caller(),
                                     })
                                 }
                             },
-                            Some((Type::String, "mode")) =>
+                            Some((nbt::Type::String, "mode")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(&mut reader, "set-pin-mode/pin")?
+                                match collect_string::<{ interactive::PinMode::AS_STRING_PREFERRED_CAPACITY }>(
+                                    &mut reader,
+                                    "set-pin-mode/pin",
+                                    Location::caller())?
                                     .as_str().try_into()
                                 {
                                     Ok(id) => mode = Some(id),
@@ -773,6 +856,7 @@ fn process() -> !
                                     {
                                         message: "Invalid mode.",
                                         path: "set-pin-mode/mode",
+                                        location: Location::caller(),
                                     })
                                 }
                             },
@@ -780,6 +864,7 @@ fn process() -> !
                             {
                                 message: "Invalid field.",
                                 path: "set-pin-mode/",
+                                location: Location::caller(),
                             }),
                         }
                     }
@@ -805,11 +890,13 @@ fn process() -> !
                         {
                             message: "Missing 'pin' field.",
                             path: "set-pin-mode/",
+                            location: Location::caller(),
                         }),
                         (_, None) => return Err(ReadError::InvalidRequest
                         {
                             message: "Missing 'mode' field.",
                             path: "set-pin-mode/",
+                            location: Location::caller(),
                         }),
                     }
                 }
@@ -817,6 +904,7 @@ fn process() -> !
                 {
                     message: "Invalid root tag.",
                     path: "",
+                    location: Location::caller(),
                 })
             }
         })
@@ -827,16 +915,16 @@ fn process() -> !
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-config")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("name")?;
                     writer.write_string("Arduino Uno")?;
 
-                    writer.write_type(Type::List)?;
+                    writer.write_type(nbt::Type::List)?;
                     writer.write_name("pins")?;
-                    writer.write_element_type(ElementType::Compound)?;
+                    writer.write_element_type(nbt::ElementType::Compound)?;
                     writer.write_len(18)?;
                     {
                         let mut write_pin = |
@@ -844,22 +932,24 @@ fn process() -> !
                             display: &str,
                             modes: &[&str]| -> Result<(), Infallible>
                         {
-                            writer.write_type(Type::String)?;
+                            writer.write_type(nbt::Type::String)?;
                             writer.write_name("name")?;
                             writer.write_string(name)?;
 
-                            writer.write_type(Type::String)?;
+                            writer.write_type(nbt::Type::String)?;
                             writer.write_name("display")?;
                             writer.write_string(display)?;
 
-                            writer.write_type(Type::List)?;
+                            writer.write_type(nbt::Type::List)?;
                             writer.write_name("modes")?;
-                            writer.write_element_type(ElementType::String)?;
+                            writer.write_element_type(nbt::ElementType::String)?;
                             writer.write_len(modes.len() as u32)?;
                             for mode in modes
                             {
                                 writer.write_string(mode)?;
                             }
+
+                            writer.write_end()?;
 
                             Ok(())
                         };
@@ -896,14 +986,14 @@ fn process() -> !
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
-                    writer.write_type(Type::Byte)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("is-high")?;
                     writer.write_bool(is_high)?;
 
@@ -913,20 +1003,28 @@ fn process() -> !
                 Ok(())
             }),
             // MARK: GetPinError
-            Ok(Response::GetPinError { pin, message }) => infallible_scope(|| unsafe
+            Ok(Response::GetPinError { pin, message, location }) => infallible_scope(|| unsafe
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
                     writer.write_string(message)?;
+
+                    writer.write_type(nbt::Type::String)?;
+                    writer.write_name("file")?;
+                    writer.write_string(location.file())?;
+
+                    writer.write_type(nbt::Type::Int)?;
+                    writer.write_name("line")?;
+                    writer.write_uint(location.line())?;
 
                     writer.write_end()?;
                 }
@@ -938,10 +1036,10 @@ fn process() -> !
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
@@ -951,20 +1049,28 @@ fn process() -> !
                 Ok(())
             }),
             // MARK: SetPinError
-            Ok(Response::SetPinError { pin, message }) => infallible_scope(|| unsafe
+            Ok(Response::SetPinError { pin, message, location }) => infallible_scope(|| unsafe
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
                     writer.write_string(message)?;
+
+                    writer.write_type(nbt::Type::String)?;
+                    writer.write_name("file")?;
+                    writer.write_string(location.file())?;
+
+                    writer.write_type(nbt::Type::Int)?;
+                    writer.write_name("line")?;
+                    writer.write_uint(location.line())?;
 
                     writer.write_end()?;
                 }
@@ -976,14 +1082,14 @@ fn process() -> !
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin-mode")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("mode")?;
                     writer.write_string(mode.into())?;
 
@@ -993,20 +1099,28 @@ fn process() -> !
                 Ok(())
             }),
             // MARK: GetPinModeError
-            Ok(Response::GetPinModeError { pin, message }) => infallible_scope(|| unsafe
+            Ok(Response::GetPinModeError { pin, message, location }) => infallible_scope(|| unsafe
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin-mode")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
                     writer.write_string(message)?;
+
+                    writer.write_type(nbt::Type::String)?;
+                    writer.write_name("file")?;
+                    writer.write_string(location.file())?;
+
+                    writer.write_type(nbt::Type::Int)?;
+                    writer.write_name("line")?;
+                    writer.write_uint(location.line())?;
 
                     writer.write_end()?;
                 }
@@ -1018,10 +1132,10 @@ fn process() -> !
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin-mode")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
@@ -1031,20 +1145,28 @@ fn process() -> !
                 Ok(())
             }),
             // MARK: SetPinModeError
-            Ok(Response::SetPinModeError { pin, message }) => infallible_scope(|| unsafe
+            Ok(Response::SetPinModeError { pin, message, location }) => infallible_scope(|| unsafe
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin-mode")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("pin")?;
                     writer.write_string(pin.into())?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
                     writer.write_string(message)?;
+
+                    writer.write_type(nbt::Type::String)?;
+                    writer.write_name("file")?;
+                    writer.write_string(location.file())?;
+
+                    writer.write_type(nbt::Type::Int)?;
+                    writer.write_name("line")?;
+                    writer.write_uint(location.line())?;
 
                     writer.write_end()?;
                 }
@@ -1056,15 +1178,15 @@ fn process() -> !
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("error")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("type")?;
                     writer.write_string(
                         "timeout")?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("message")?;
                     writer.write_string(
                         "Timed out while reading command.")?;
@@ -1079,15 +1201,15 @@ fn process() -> !
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("error")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("type")?;
                     writer.write_string(
                         "control-byte")?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("message")?;
                     writer.write_string(
                         "Found control byte while reading command.")?;
@@ -1098,25 +1220,33 @@ fn process() -> !
                 Ok(())
             }),
             // MARK: InvalidRequest
-            Err(ReadError::InvalidRequest { message, path }) => infallible_scope(|| unsafe
+            Err(ReadError::InvalidRequest { message, path, location }) => infallible_scope(|| unsafe
             {
                 block!(raw_serial_writer.write(CONTROL_BYTE))?;
                 block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                writer.write_type(Type::Compound)?;
+                writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("error")?;
                 {
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("type")?;
                     writer.write_string(
                         "invalid-request")?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("message")?;
                     writer.write_string(message)?;
 
-                    writer.write_type(Type::String)?;
+                    writer.write_type(nbt::Type::String)?;
                     writer.write_name("path")?;
                     writer.write_string(path)?;
+
+                    writer.write_type(nbt::Type::String)?;
+                    writer.write_name("file")?;
+                    writer.write_string(location.file())?;
+
+                    writer.write_type(nbt::Type::Int)?;
+                    writer.write_name("line")?;
+                    writer.write_uint(location.line())?;
 
                     writer.write_end()?;
                 }
@@ -1138,9 +1268,10 @@ fn try_scope<T, E>(f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
 }
 
 unsafe fn collect_type_or_end_and_name<const N: usize>(
-    reader: &mut impl ReadRaw<Error = ReadError>,
-    error_path: &'static str)
-    -> Result<Option<(Type, heapless::String<N>)>, ReadError>
+    reader: &mut impl nbt::ReadRaw<Error = ReadError>,
+    error_path: &'static str,
+    error_location: &'static Location<'static>)
+    -> Result<Option<(nbt::Type, heapless::String<N>)>, ReadError>
 {
     let tag = match reader.read_type_or_end()?
     {
@@ -1153,17 +1284,19 @@ unsafe fn collect_type_or_end_and_name<const N: usize>(
             {
                 message: "Type is not valid.",
                 path: error_path,
+                location: error_location,
             });
         },
     };
 
-    Ok(Some((tag, collect_name(reader, error_path)?)))
+    Ok(Some((tag, collect_name(reader, error_path, error_location)?)))
 }
 
 unsafe fn collect_type_and_name<const N: usize>(
-    reader: &mut impl ReadRaw<Error = ReadError>,
-    error_path: &'static str)
-    -> Result<(Type, heapless::String<N>), ReadError>
+    reader: &mut impl nbt::ReadRaw<Error = ReadError>,
+    error_path: &'static str,
+    error_location: &'static Location<'static>)
+    -> Result<(nbt::Type, heapless::String<N>), ReadError>
 {
     let tag = match reader.read_type()?
     {
@@ -1175,16 +1308,18 @@ unsafe fn collect_type_and_name<const N: usize>(
             {
                 message: "Type is not valid.",
                 path: error_path,
+                location: error_location,
             });
         },
     };
 
-    Ok((tag, collect_name(reader, error_path)?))
+    Ok((tag, collect_name(reader, error_path, error_location)?))
 }
 
 unsafe fn collect_name<const N: usize>(
-    reader: &mut impl ReadRaw<Error = ReadError>,
-    error_path: &'static str)
+    reader: &mut impl nbt::ReadRaw<Error = ReadError>,
+    error_path: &'static str,
+    error_location: &'static Location<'static>)
     -> Result<heapless::String<N>, ReadError>
 {
     let len = reader.read_ushort()?;
@@ -1195,6 +1330,7 @@ unsafe fn collect_name<const N: usize>(
         {
             message: "Name is too long.",
             path: error_path,
+            location: error_location,
         });
     }
 
@@ -1209,6 +1345,7 @@ unsafe fn collect_name<const N: usize>(
             {
                 message: "Name is too long.",
                 path: error_path,
+                location: error_location,
             });
         };
     }
@@ -1220,13 +1357,15 @@ unsafe fn collect_name<const N: usize>(
         {
             message: "Name is not valid UTF-8.",
             path: error_path,
+            location: error_location,
         }),
     }
 }
 
 unsafe fn collect_string<const N: usize>(
-    reader: &mut impl ReadRaw<Error = ReadError>,
-    error_path: &'static str)
+    reader: &mut impl nbt::ReadRaw<Error = ReadError>,
+    error_path: &'static str,
+    error_location: &'static Location<'static>)
     -> Result<heapless::String<N>, ReadError>
 {
     let len = reader.read_ushort()?;
@@ -1237,6 +1376,7 @@ unsafe fn collect_string<const N: usize>(
         {
             message: "String is too long.",
             path: error_path,
+            location: error_location,
         });
     }
 
@@ -1251,6 +1391,7 @@ unsafe fn collect_string<const N: usize>(
             {
                 message: "String is too long.",
                 path: error_path,
+                location: error_location,
             })
         };
     }
@@ -1262,6 +1403,7 @@ unsafe fn collect_string<const N: usize>(
         {
             message: "String is not valid UTF-8.",
             path: error_path,
+            location: error_location,
         }),
     }
 }

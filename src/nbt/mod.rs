@@ -1,11 +1,13 @@
 
 mod tag;
 mod binary;
+mod reader;
+mod writer;
 
 pub use tag::*;
 pub use binary::*;
-pub mod reader;
-pub mod writer;
+pub use reader::*;
+pub use writer::*;
 
 // Spec according to:
 // - https://github.com/acfoltzer/nbt/blob/master/NBT-spec.txt

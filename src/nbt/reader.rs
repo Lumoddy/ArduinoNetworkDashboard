@@ -10,49 +10,49 @@ pub trait ReadRaw
 {
     type Error;
 
-    unsafe fn discard<'s>(&'s mut self, bytes: usize)
+    fn discard<'s>(&'s mut self, bytes: usize)
         -> Result<(), Self::Error>;
 
-    unsafe fn read_type<'s>(&'s mut self)
+    fn read_type<'s>(&'s mut self)
         -> Result<Result<Type, DataBuffered>, Self::Error>;
 
-    unsafe fn read_type_or_end<'s>(&'s mut self)
+    fn read_type_or_end<'s>(&'s mut self)
         -> Result<Result<Option<Type>, DataBuffered>, Self::Error>;
 
-    unsafe fn read_element_type<'s>(&'s mut self)
+    fn read_element_type<'s>(&'s mut self)
         -> Result<Result<ElementType, DataBuffered>, Self::Error>;
 
-    unsafe fn read_end<'s>(&'s mut self)
+    fn read_end<'s>(&'s mut self)
         -> Result<Result<(), DataBuffered>, Self::Error>;
 
-    unsafe fn read_len<'s>(&'s mut self)
+    fn read_len<'s>(&'s mut self)
         -> Result<u32, Self::Error>;
 
-    unsafe fn read_bool<'s>(&'s mut self)
+    fn read_bool<'s>(&'s mut self)
         -> Result<bool, Self::Error>;
 
-    unsafe fn read_byte<'s>(&'s mut self)
+    fn read_byte<'s>(&'s mut self)
         -> Result<i8, Self::Error>;
 
-    unsafe fn read_ubyte<'s>(&'s mut self)
+    fn read_ubyte<'s>(&'s mut self)
         -> Result<u8, Self::Error>;
 
-    unsafe fn read_short<'s>(&'s mut self)
+    fn read_short<'s>(&'s mut self)
         -> Result<i16, Self::Error>;
 
-    unsafe fn read_ushort<'s>(&'s mut self)
+    fn read_ushort<'s>(&'s mut self)
         -> Result<u16, Self::Error>;
 
-    unsafe fn read_int<'s>(&'s mut self)
+    fn read_int<'s>(&'s mut self)
         -> Result<i32, Self::Error>;
 
-    unsafe fn read_uint<'s>(&'s mut self)
+    fn read_uint<'s>(&'s mut self)
         -> Result<u32, Self::Error>;
 
-    unsafe fn read_long<'s>(&'s mut self)
+    fn read_long<'s>(&'s mut self)
         -> Result<i64, Self::Error>;
 
-    unsafe fn read_ulong<'s>(&'s mut self)
+    fn read_ulong<'s>(&'s mut self)
         -> Result<u64, Self::Error>;
 }
 
@@ -75,18 +75,18 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
 {
     type Error = E;
 
-    unsafe fn discard<'s>(&'s mut self, bytes: usize) -> Result<(), E>
+    fn discard<'s>(&'s mut self, bytes: usize) -> Result<(), E>
     {
         for _ in 0..bytes
         {
             _ = if self._buffer.is_empty() { (self._f)()? }
-            else { self._buffer.pop_back_unchecked() }
+            else { unsafe { self._buffer.pop_back_unchecked() } }
         }
 
         Ok(())
     }
 
-    unsafe fn read_type<'s>(&'s mut self)
+    fn read_type<'s>(&'s mut self)
         -> Result<Result<Type, DataBuffered>, E>
     {
         match self._buffer.back()
@@ -121,7 +121,7 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
         }
     }
 
-    unsafe fn read_type_or_end<'s>(&'s mut self)
+    fn read_type_or_end<'s>(&'s mut self)
         -> Result<Result<Option<Type>, DataBuffered>, E>
     {
         match self._buffer.back()
@@ -144,11 +144,10 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
                 },
                 Err(()) => Ok(Err(DataBuffered { byte_count: 1 }))
             },
-            None =>
+            None => match (self._f)()?
             {
-                let byte = (self._f)()?;
-
-                match Type::try_from(byte)
+                0 => Ok(Ok(None)),
+                byte => match Type::try_from(byte)
                 {
                     Ok(tag) => Ok(Ok(Some(tag))),
                     Err(()) =>
@@ -163,7 +162,7 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
         }
     }
 
-    unsafe fn read_element_type<'s>(&'s mut self)
+    fn read_element_type<'s>(&'s mut self)
         -> Result<Result<ElementType, DataBuffered>, E>
     {
         match self._buffer.back()
@@ -179,11 +178,9 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
                 },
                 Err(()) => Ok(Err(DataBuffered { byte_count: 1 }))
             },
-            None =>
+            None => match (self._f)()?
             {
-                let byte = (self._f)()?;
-
-                match ElementType::try_from(byte)
+                byte => match ElementType::try_from(byte)
                 {
                     Ok(tag) => Ok(Ok(tag)),
                     Err(()) =>
@@ -198,22 +195,19 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
         }
     }
 
-    unsafe fn read_end<'s>(&'s mut self)
+    fn read_end<'s>(&'s mut self)
         -> Result<Result<(), DataBuffered>, E>
     {
         match self._buffer.back()
         {
-            Some(&byte) => match byte
+            Some(&0) =>
             {
-                0 =>
-                {
-                    // SAFETY: Buffer not empty here.
-                    unsafe { self._buffer.pop_back_unchecked(); }
+                // SAFETY: Buffer not empty here.
+                unsafe { self._buffer.pop_back_unchecked(); }
 
-                    Ok(Ok(()))
-                },
-                _ => Ok(Err(DataBuffered { byte_count: 1 }))
+                Ok(Ok(()))
             },
+            Some(_) => Ok(Err(DataBuffered { byte_count: 1 })),
             None => match (self._f)()?
             {
                 0 => Ok(Ok(())),
@@ -228,25 +222,25 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
         }
     }
 
-    unsafe fn read_len<'s>(&'s mut self)
+    fn read_len<'s>(&'s mut self)
         -> Result<u32, E>
     {
         self.read_uint()
     }
 
-    unsafe fn read_bool<'s>(&'s mut self)
+    fn read_bool<'s>(&'s mut self)
         -> Result<bool, E>
     {
         Ok(self.read_ubyte()? != 0)
     }
 
-    unsafe fn read_byte<'s>(&'s mut self)
+    fn read_byte<'s>(&'s mut self)
         -> Result<i8, E>
     {
         self.read_ubyte().map(|x| x as i8)
     }
 
-    unsafe fn read_ubyte<'s>(&'s mut self)
+    fn read_ubyte<'s>(&'s mut self)
         -> Result<u8, E>
     {
         match self._buffer.pop_back()
@@ -256,13 +250,13 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
         }
     }
 
-    unsafe fn read_short<'s>(&'s mut self)
+    fn read_short<'s>(&'s mut self)
         -> Result<i16, E>
     {
         self.read_ushort().map(|x| x as i16)
     }
 
-    unsafe fn read_ushort<'s>(&'s mut self)
+    fn read_ushort<'s>(&'s mut self)
         -> Result<u16, E>
     {
         Ok(match self._endian
@@ -280,13 +274,13 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
         })
     }
 
-    unsafe fn read_int<'s>(&'s mut self)
+    fn read_int<'s>(&'s mut self)
         -> Result<i32, E>
     {
         self.read_uint().map(|x| x as i32)
     }
 
-    unsafe fn read_uint<'s>(&'s mut self)
+    fn read_uint<'s>(&'s mut self)
         -> Result<u32, E>
     {
         Ok(match self._endian
@@ -308,13 +302,13 @@ impl<E, F: FnMut() -> Result<u8, E>> ReadRaw for ClosureRawReader<E, F>
         })
     }
 
-    unsafe fn read_long<'s>(&'s mut self)
+    fn read_long<'s>(&'s mut self)
         -> Result<i64, E>
     {
         self.read_ulong().map(|x| x as i64)
     }
 
-    unsafe fn read_ulong<'s>(&'s mut self)
+    fn read_ulong<'s>(&'s mut self)
         -> Result<u64, E>
     {
         Ok(match self._endian
