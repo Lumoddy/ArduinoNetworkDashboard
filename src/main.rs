@@ -65,66 +65,61 @@ pub enum InteractivePinID
     A0, A1, A2, A3, A4, A5,
 }
 
-impl InteractivePinID
-{
-    const AS_STRING_PREFERRED_CAPACITY: usize = 4;
-}
-
-impl TryFrom<&str> for InteractivePinID
+impl TryFrom<u8> for InteractivePinID
 {
     type Error = ();
 
-    fn try_from(value: &str) -> Result<Self, Self::Error>
+    fn try_from(value: u8) -> Result<Self, Self::Error>
     {
         match value
         {
-            "d2" | "D2" => Ok(InteractivePinID::D2),
-            "d3" | "D3" => Ok(InteractivePinID::D3),
-            "d4" | "D4" => Ok(InteractivePinID::D4),
-            "d5" | "D5" => Ok(InteractivePinID::D5),
-            "d6" | "D6" => Ok(InteractivePinID::D6),
-            "d7" | "D7" => Ok(InteractivePinID::D7),
-            "d8" | "D8" => Ok(InteractivePinID::D8),
-            "d9" | "D9" => Ok(InteractivePinID::D9),
-            "d10" | "D10" => Ok(InteractivePinID::D10),
-            "d11" | "D11" => Ok(InteractivePinID::D11),
-            "d12" | "D12" => Ok(InteractivePinID::D12),
-            "d13" | "D13" => Ok(InteractivePinID::D13),
-            "a0" | "A0" => Ok(InteractivePinID::A0),
-            "a1" | "A1" => Ok(InteractivePinID::A1),
-            "a2" | "A2" => Ok(InteractivePinID::A2),
-            "a3" | "A3" => Ok(InteractivePinID::A3),
-            "a4" | "A4" => Ok(InteractivePinID::A4),
-            "a5" | "A5" => Ok(InteractivePinID::A5),
+            0 => Ok(InteractivePinID::D2),
+            1 => Ok(InteractivePinID::D3),
+            2 => Ok(InteractivePinID::D4),
+            3 => Ok(InteractivePinID::D5),
+            4 => Ok(InteractivePinID::D6),
+            5 => Ok(InteractivePinID::D7),
+            6 => Ok(InteractivePinID::D8),
+            7 => Ok(InteractivePinID::D9),
+            8 => Ok(InteractivePinID::D10),
+            9 => Ok(InteractivePinID::D11),
+            10 => Ok(InteractivePinID::D12),
+            11 => Ok(InteractivePinID::D13),
+            12 => Ok(InteractivePinID::A0),
+            13 => Ok(InteractivePinID::A1),
+            14 => Ok(InteractivePinID::A2),
+            15 => Ok(InteractivePinID::A3),
+            16 => Ok(InteractivePinID::A4),
+            17 => Ok(InteractivePinID::A5),
             _ => Err(()),
         }
     }
 }
 
-impl From<InteractivePinID> for &'static str
+impl From<InteractivePinID> for u8
 {
     fn from(value: InteractivePinID) -> Self
     {
         match value
         {
-            InteractivePinID::D2 => "D2",
-            InteractivePinID::D3 => "D3",
-            InteractivePinID::D4 => "D4",
-            InteractivePinID::D5 => "D5",
-            InteractivePinID::D6 => "D6",
-            InteractivePinID::D7 => "D7",
-            InteractivePinID::D8 => "D8",
-            InteractivePinID::D9 => "D9",
-            InteractivePinID::D10 => "D10",
-            InteractivePinID::D11 => "D11",
-            InteractivePinID::D12 => "D12",
-            InteractivePinID::D13 => "D13",
-            InteractivePinID::A0 => "A0",
-            InteractivePinID::A1 => "A1",
-            InteractivePinID::A2 => "A2",
-            InteractivePinID::A3 => "A3",
-            InteractivePinID::A4 => "A4",
-            InteractivePinID::A5 => "A5",
+            InteractivePinID::D2 => 0,
+            InteractivePinID::D3 => 1,
+            InteractivePinID::D4 => 2,
+            InteractivePinID::D5 => 3,
+            InteractivePinID::D6 => 4,
+            InteractivePinID::D7 => 5,
+            InteractivePinID::D8 => 6,
+            InteractivePinID::D9 => 7,
+            InteractivePinID::D10 => 8,
+            InteractivePinID::D11 => 9,
+            InteractivePinID::D12 => 10,
+            InteractivePinID::D13 => 11,
+            InteractivePinID::A0 => 12,
+            InteractivePinID::A1 => 13,
+            InteractivePinID::A2 => 14,
+            InteractivePinID::A3 => 15,
+            InteractivePinID::A4 => 16,
+            InteractivePinID::A5 => 17,
         }
     }
 }
@@ -431,9 +426,9 @@ fn process() -> !
                     writer.write_type(nbt::Type::Compound)?;
                     writer.write_name("pin-changed")?;
                     {
-                        writer.write_type(nbt::Type::String)?;
+                        writer.write_type(nbt::Type::Byte)?;
                         writer.write_name("pin")?;
-                        writer.write_string(pin.into())?;
+                        writer.write_ubyte(pin.into())?;
 
                         writer.write_type(nbt::Type::Byte)?;
                         writer.write_name("is-high")?;
@@ -610,13 +605,9 @@ fn process() -> !
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((nbt::Type::String, "pin")) =>
+                            Some((nbt::Type::Byte, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
-                                    &mut reader,
-                                    "get-pin/pin",
-                                    Location::caller())?
-                                    .as_str().try_into()
+                                match reader.read_ubyte()?.try_into()
                                 {
                                     Ok(id) => pin = Some(id),
                                     Err(()) => return Err(ReadError::InvalidRequest
@@ -677,13 +668,9 @@ fn process() -> !
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((nbt::Type::String, "pin")) =>
+                            Some((nbt::Type::Byte, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
-                                    &mut reader,
-                                    "set-pin/pin",
-                                    Location::caller())?
-                                    .as_str().try_into()
+                                match reader.read_ubyte()?.try_into()
                                 {
                                     Ok(id) => pin = Some(id),
                                     Err(()) => return Err(ReadError::InvalidRequest
@@ -759,13 +746,9 @@ fn process() -> !
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((nbt::Type::String, "pin")) =>
+                            Some((nbt::Type::Byte, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
-                                    &mut reader,
-                                    "get-pin-mode/pin",
-                                    Location::caller())?
-                                    .as_str().try_into()
+                                match reader.read_ubyte()?.try_into()
                                 {
                                     Ok(id) => pin = Some(id),
                                     Err(()) => return Err(ReadError::InvalidRequest
@@ -826,13 +809,9 @@ fn process() -> !
                             .as_ref().map(|(tag, name)| (tag, name.as_str()))
                         {
                             None => break,
-                            Some((nbt::Type::String, "pin")) =>
+                            Some((nbt::Type::Byte, "pin")) =>
                             {
-                                match collect_string::<{ InteractivePinID::AS_STRING_PREFERRED_CAPACITY }>(
-                                    &mut reader,
-                                    "set-pin-mode/pin",
-                                    Location::caller())?
-                                    .as_str().try_into()
+                                match reader.read_ubyte()?.try_into()
                                 {
                                     Ok(id) => pin = Some(id),
                                     Err(()) => return Err(ReadError::InvalidRequest
@@ -928,17 +907,17 @@ fn process() -> !
                     writer.write_len(18)?;
                     {
                         let mut write_pin = |
+                            id: u8,
                             name: &str,
-                            display: &str,
                             modes: &[&str]| -> Result<(), Infallible>
                         {
+                            writer.write_type(nbt::Type::Byte)?;
+                            writer.write_name("id")?;
+                            writer.write_ubyte(id)?;
+
                             writer.write_type(nbt::Type::String)?;
                             writer.write_name("name")?;
                             writer.write_string(name)?;
-
-                            writer.write_type(nbt::Type::String)?;
-                            writer.write_name("display")?;
-                            writer.write_string(display)?;
 
                             writer.write_type(nbt::Type::List)?;
                             writer.write_name("modes")?;
@@ -954,26 +933,26 @@ fn process() -> !
                             Ok(())
                         };
 
-                        write_pin("D2", "2", &["digital-input", "digital-output"])?;
-                        write_pin("D3", "~3", &["digital-input", "digital-output"])?;
-                        write_pin("D4", "4", &["digital-input", "digital-output"])?;
-                        write_pin("D5", "~5", &["digital-input", "digital-output"])?;
-                        write_pin("D6", "~6", &["digital-input", "digital-output"])?;
-                        write_pin("D7", "7", &["digital-input", "digital-output"])?;
+                        write_pin(0, "D2", &["digital-input", "digital-output"])?;
+                        write_pin(1, "D3", &["digital-input", "digital-output"])?;
+                        write_pin(2, "D4", &["digital-input", "digital-output"])?;
+                        write_pin(3, "D5", &["digital-input", "digital-output"])?;
+                        write_pin(4, "D6", &["digital-input", "digital-output"])?;
+                        write_pin(5, "D7", &["digital-input", "digital-output"])?;
 
-                        write_pin("D8", "8", &["digital-input", "digital-output"])?;
-                        write_pin("D9", "~9", &["digital-input", "digital-output"])?;
-                        write_pin("D10", "~10", &["digital-input", "digital-output"])?;
-                        write_pin("D11", "~11", &["digital-input", "digital-output"])?;
-                        write_pin("D12", "12", &["digital-input", "digital-output"])?;
-                        write_pin("D13", "13", &["digital-input", "digital-output"])?;
+                        write_pin(6, "D8", &["digital-input", "digital-output"])?;
+                        write_pin(7, "D9", &["digital-input", "digital-output"])?;
+                        write_pin(8, "D10", &["digital-input", "digital-output"])?;
+                        write_pin(9, "D11", &["digital-input", "digital-output"])?;
+                        write_pin(10, "D12", &["digital-input", "digital-output"])?;
+                        write_pin(11, "D13", &["digital-input", "digital-output"])?;
 
-                        write_pin("A0", "A0", &["digital-input", "digital-output"])?;
-                        write_pin("A1", "A1", &["digital-input", "digital-output"])?;
-                        write_pin("A2", "A2", &["digital-input", "digital-output"])?;
-                        write_pin("A3", "A3", &["digital-input", "digital-output"])?;
-                        write_pin("A4", "A4", &["digital-input", "digital-output"])?;
-                        write_pin("A5", "A5", &["digital-input", "digital-output"])?;
+                        write_pin(12, "A0", &["digital-input", "digital-output"])?;
+                        write_pin(13, "A1", &["digital-input", "digital-output"])?;
+                        write_pin(14, "A2", &["digital-input", "digital-output"])?;
+                        write_pin(15, "A3", &["digital-input", "digital-output"])?;
+                        write_pin(16, "A4", &["digital-input", "digital-output"])?;
+                        write_pin(17, "A5", &["digital-input", "digital-output"])?;
                     }
 
                     writer.write_end()?;
@@ -989,9 +968,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("is-high")?;
@@ -1010,9 +989,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
@@ -1039,9 +1018,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_end()?;
                 }
@@ -1056,9 +1035,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
@@ -1085,9 +1064,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin-mode")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_type(nbt::Type::String)?;
                     writer.write_name("mode")?;
@@ -1106,9 +1085,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+get-pin-mode")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
@@ -1135,9 +1114,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin-mode")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_end()?;
                 }
@@ -1152,9 +1131,9 @@ fn process() -> !
                 writer.write_type(nbt::Type::Compound)?;
                 writer.write_name("+set-pin-mode")?;
                 {
-                    writer.write_type(nbt::Type::String)?;
+                    writer.write_type(nbt::Type::Byte)?;
                     writer.write_name("pin")?;
-                    writer.write_string(pin.into())?;
+                    writer.write_ubyte(pin.into())?;
 
                     writer.write_type(nbt::Type::String)?;
                     writer.write_name("error")?;
