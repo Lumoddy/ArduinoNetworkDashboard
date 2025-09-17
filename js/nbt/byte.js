@@ -92,9 +92,7 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
     {
         const dataView = new DataView(new ArrayBuffer(1));
 
-        console.log("b(")
         dataView.setUint8(0, yield);
-        console.log(")b")
 
         return dataView.getInt8(0);
     }

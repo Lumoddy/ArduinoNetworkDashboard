@@ -11,7 +11,7 @@ import { IntPayloadSerializer, IntPayloadDeserializer } from "../int.js";
 */ export class CompoundListTag extends ListTag
 {
     /**
-    @param {readonly (Map<string, Tag> | Record<string, Tag> | CompoundTag)[]} value
+    @param {readonly (Iterable<[string, Tag]> | CompoundTag)[]} value
     @public*/ constructor(value)
     {
         super();

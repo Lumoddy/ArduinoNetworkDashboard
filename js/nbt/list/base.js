@@ -42,7 +42,7 @@ import { Tag } from "../base.js";
     @returns {number}
     @public @abstract*/ get length()
     {
-        throw new TypeError("Cannot call abstract length of ListTag.");
+        throw new TypeError("Cannot call abstract function.");
     }
 }
 

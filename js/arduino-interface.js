@@ -5,20 +5,26 @@ import * as NBT from "./nbt.js";
 @typedef {
 {
     readonly name: string,
-    readonly pins: (
-        {
-            id: string,
-            name: string,
-            allowAnalogRead: false,
-            allowAnalogWrite: false,
-        }
-    )[]
+    readonly pins: { name: string }[],
 }
 } ArduinoConfig
 */
 
 /**
-*/ export class ArduinoError extends Error { }
+*/ export class ArduinoError extends Error
+{
+    /**
+    @param {string} message
+    @param {string} file
+    @param {number} line
+    @public*/ constructor(message, file, line)
+    {
+        const cause = new Error(message);
+        cause.stack = `\n    at ${file}:${line}`;
+        cause.name = "Error (in connected Arduino)";
+        super(message, { cause });
+    }
+}
 
 /**
 */ class ArduinoInterfaceInternals extends Error { }
@@ -40,17 +46,31 @@ import * as NBT from "./nbt.js";
     reader: ReadableStreamDefaultReader<Uint8Array<ArrayBufferLike>>,
     writer: WritableStreamDefaultWriter<Uint8Array<ArrayBufferLike>>,
     configResponder: IteratorResult<_Responder<ArduinoConfig>[], ArduinoConfig>,
-    getPinResponders: Record<string, _Responder<boolean>[]>,
-    getPinQueued: Record<string, null>,
-    setPinResponders: Record<string, _Responder<void>[]>,
-    setPinQueued: Record<string, boolean>,
-    getPinModeResponders: Record<string, _Responder<string>[]>,
-    getPinModeQueued: Record<string, null>,
-    setPinModeResponders: Record<string, _Responder<void>[]>,
-    setPinModeQueued: Record<string, string>,
-    pinChangeResponders: Record<string, _Responder<boolean>[]>,
+    getPinResponders: Record<number, _Responder<boolean>[]>,
+    getPinQueued: Record<number, null>,
+    setPinResponders: Record<number, _Responder<void>[]>,
+    setPinQueued: Record<number, boolean>,
+    getPinModeResponders: Record<number, _Responder<string>[]>,
+    getPinModeQueued: Record<number, null>,
+    setPinModeResponders: Record<number, _Responder<void>[]>,
+    setPinModeQueued: Record<number, string>,
 }
 } _State
+*/
+
+/**
+@export @typedef {{
+    "pinChange": [
+        event:
+        {
+            target: ArduinoInterface,
+            pinId: number,
+            pin: string,
+            pinIsHigh: boolean,
+        }
+        ],
+    "release": [event: { target: ArduinoInterface }],
+}} ArduinoInterfaceEventMap
 */
 
 /**
@@ -113,20 +133,28 @@ import * as NBT from "./nbt.js";
             reader,
             writer,
             configResponder: { done: false, value: [] },
-            getPinResponders: {},
-            getPinQueued: {},
-            setPinResponders: {},
-            setPinQueued: {},
-            setPinModeResponders: {},
-            setPinModeQueued: {},
-            getPinModeResponders: {},
-            getPinModeQueued: {},
-            pinChangeResponders: {},
+            getPinResponders: [],
+            getPinQueued: [],
+            setPinResponders: [],
+            setPinQueued: [],
+            setPinModeResponders: [],
+            setPinModeQueued: [],
+            getPinModeResponders: [],
+            getPinModeQueued: [],
         };
 
         /**
         @type {boolean}
         @private*/ this._blockQueue = false;
+
+        /**
+        @type {
+        {
+            [K in keyof ArduinoInterfaceEventMap]?:
+                ((...args: ArduinoInterfaceEventMap[K]) => void)[]
+        }
+        }
+        @private*/ this._listeners = {};
 
         (async () =>
         {
@@ -142,8 +170,6 @@ import * as NBT from "./nbt.js";
 
                 try
                 {
-                    console.log("reading");
-
                     /**
                     @type {IteratorResult<Uint8Array<ArrayBufferLike>>}
                     */ const { done, value } = await new Promise((resolve, reject) =>
@@ -152,14 +178,17 @@ import * as NBT from "./nbt.js";
                         let timeoutHandle = undefined;
 
                         if (deserializer !== null)
+                        {
                             timeoutHandle = setTimeout(
                                 () =>
                                 {
                                     timedOut = true;
+                                    deserializer = null;
                                     reject(new Error(
                                         "Interface read timed out during message read."));
                                 },
                                 ArduinoInterface._TIMEOUT_MILLI);
+                        }
 
                         // @ts-ignore
                         this._state.reader.read().then((value) =>
@@ -174,14 +203,12 @@ import * as NBT from "./nbt.js";
                     if (done)
                         return;
 
-                    console.log("read " + value.length);
-
-                    for (let byte of value)
+                    for (const byte of value)
                     {
-                        let result;
-
                         if (isControlByte)
                         {
+                            isControlByte = false;
+
                             switch (byte)
                             {
                                 case ArduinoInterface._START_TEXT_BYTE:
@@ -189,20 +216,17 @@ import * as NBT from "./nbt.js";
                                         { endian: "little" });
                                     console.log(
                                         "Starting read of new response.");
-                                    break;
+                                    continue;
                                 case ArduinoInterface._CONTROL_BYTE:
-                                    byte = ArduinoInterface._CONTROL_BYTE;
                                     break;
                                 default:
                                     console.warn(
-                                        `Received invalid control byte '${byte
+                                        `Received invalid control byte '0x${byte
                                             .toString(16)
                                             .toUpperCase()
                                             .padStart(2, "0")}'.`);
                                     continue;
                             }
-
-                            isControlByte = false;
                         }
                         else
                         {
@@ -216,6 +240,8 @@ import * as NBT from "./nbt.js";
 
                         if (deserializer !== null)
                         {
+                            let result;
+
                             try
                             {
                                 result = deserializer.push(byte);
@@ -226,7 +252,9 @@ import * as NBT from "./nbt.js";
                             }
                             catch (error)
                             {
-                                console.error(error);
+                                console.error(new Error(
+                                    "Arduino sent invalid tag binary.",
+                                    { cause: error }));
                                 deserializer = null;
                                 continue reading;
                             }
@@ -280,12 +308,29 @@ import * as NBT from "./nbt.js";
     }
 
     /**
-    @param {string} pin
+    @overload
+    @param {string} pinName
+    @returns {Promise<boolean>}
+    *//**
+    @overload
+    @param {number} pinId
+    @returns {Promise<boolean>}
+    *//**
+    @param {string | number} pin
     @returns {Promise<boolean>}
     @public*/ getPin(pin)
     {
-        return new Promise((resolve, reject) =>
+        return new Promise(async (resolve, reject) =>
         {
+            if (typeof pin !== "number")
+            {
+                const config = await this.getConfig();
+                pin = config.pins.findIndex((v) => v.name === pin);
+
+                if (pin === -1)
+                    throw new Error("Invalid pin name.");
+            }
+
             if (this._state === null)
                 return reject(new Error(
                     "Interface was released."));
@@ -303,13 +348,32 @@ import * as NBT from "./nbt.js";
     }
 
     /**
-    @param {string} pin
+    @overload
+    @param {string} pinName
+    @param {boolean} isHigh
+    @returns {Promise<void>}
+    *//**
+    @overload
+    @param {number} pinId
+    @param {boolean} isHigh
+    @returns {Promise<void>}
+    *//**
+    @param {string | number} pin
     @param {boolean} isHigh
     @returns {Promise<void>}
     @public*/ setPin(pin, isHigh)
     {
-        return new Promise((resolve, reject) =>
+        return new Promise(async (resolve, reject) =>
         {
+            if (typeof pin !== "number")
+            {
+                const config = await this.getConfig();
+                pin = config.pins.findIndex((v) => v.name === pin);
+
+                if (pin === -1)
+                    throw new Error("Invalid pin name.");
+            }
+
             if (this._state === null)
                 return reject(new Error(
                     "Interface was released."));
@@ -328,15 +392,28 @@ import * as NBT from "./nbt.js";
 
     /**
     @overload
-    @param {string} pin
+    @param {string} pinName
     @returns {Promise<"digital-input" | "digital-output">}
     *//**
-    @param {string} pin
+    @overload
+    @param {number} pinId
+    @returns {Promise<"digital-input" | "digital-output">}
+    *//**
+    @param {string | number} pin
     @returns {Promise<string>}
     @public*/ getPinMode(pin)
     {
-        return new Promise((resolve, reject) =>
+        return new Promise(async (resolve, reject) =>
         {
+            if (typeof pin !== "number")
+            {
+                const config = await this.getConfig();
+                pin = config.pins.findIndex((v) => v.name === pin);
+
+                if (pin === -1)
+                    throw new Error("Invalid pin name.");
+            }
+
             if (this._state === null)
                 return reject(new Error(
                     "Interface was released."));
@@ -355,22 +432,41 @@ import * as NBT from "./nbt.js";
 
     /**
     @overload
-    @param {string} pin
+    @param {string} pinName
     @param {"input" | "output" | "digital-input" | "digital-output"} mode
     @returns {Promise<void>}
     *//**
     @overload
-    @param {string} pin
+    @param {string} pinName
     @param {string} mode
     @returns {Promise<void>}
     *//**
-    @param {string} pin
+    @overload
+    @param {number} pinId
+    @param {"input" | "output" | "digital-input" | "digital-output"} mode
+    @returns {Promise<void>}
+    *//**
+    @overload
+    @param {number} pinId
+    @param {string} mode
+    @returns {Promise<void>}
+    *//**
+    @param {string | number} pin
     @param {string} mode
     @returns {Promise<void>}
     @public*/ setPinMode(pin, mode)
     {
-        return new Promise((resolve, reject) =>
+        return new Promise(async (resolve, reject) =>
         {
+            if (typeof pin !== "number")
+            {
+                const config = await this.getConfig();
+                pin = config.pins.findIndex((v) => v.name === pin);
+
+                if (pin === -1)
+                    throw new Error("Invalid pin name.");
+            }
+
             if (this._state === null)
                 return reject(new Error(
                     "Interface was released."));
@@ -393,8 +489,13 @@ import * as NBT from "./nbt.js";
         if (this._state === null)
             return;
 
-        this._state.reader.releaseLock();
-        this._state.writer.releaseLock();
+        try
+        {
+            this._state.reader.releaseLock();
+            this._state.writer.releaseLock();
+        }
+        catch (error) { console.error(error) }
+
         this._blockQueue = true;
 
         if (!this._state.configResponder.done)
@@ -405,74 +506,114 @@ import * as NBT from "./nbt.js";
                     "Interface was released.",
                     { cause: new ArduinoInterfaceInternals() });
                 error.stack = stacktrace;
-                reject(error);
+                try { reject(error) }
+                catch (error) { console.error(error) }
             }
         }
 
-        for (const pin in this._state.getPinResponders)
+        for (const id in this._state.getPinResponders)
         {
-            for (const { reject, stacktrace } of this._state.getPinResponders[pin])
+            for (const { reject, stacktrace } of this._state.getPinResponders[Number(id)])
             {
                 const error = new Error(
                     "Interface was released.",
                     { cause: new ArduinoInterfaceInternals() });
                 error.stack = stacktrace;
-                reject(error);
+                try { reject(error) }
+                catch (error) { console.error(error) }
             }
         }
 
-        for (const pin in this._state.setPinResponders)
+        for (const id in this._state.setPinResponders)
         {
-            for (const { reject, stacktrace } of this._state.setPinResponders[pin])
+            for (const { reject, stacktrace } of this._state.setPinResponders[Number(id)])
             {
                 const error = new Error(
                     "Interface was released.",
                     { cause: new ArduinoInterfaceInternals() });
                 error.stack = stacktrace;
-                reject(error);
+                try { reject(error) }
+                catch (error) { console.error(error) }
             }
         }
 
-        for (const pin in this._state.getPinModeResponders)
+        for (const id in this._state.getPinModeResponders)
         {
-            for (const { reject, stacktrace } of this._state.getPinModeResponders[pin])
+            for (const { reject, stacktrace } of this._state.getPinModeResponders[Number(id)])
             {
                 const error = new Error(
                     "Interface was released.",
                     { cause: new ArduinoInterfaceInternals() });
                 error.stack = stacktrace;
-                reject(error);
+                try { reject(error) }
+                catch (error) { console.error(error) }
             }
         }
 
-        for (const pin in this._state.setPinModeResponders)
+        for (const id in this._state.setPinModeResponders)
         {
-            for (const { reject, stacktrace } of this._state.setPinModeResponders[pin])
+            for (const { reject, stacktrace } of this._state.setPinModeResponders[Number(id)])
             {
                 const error = new Error(
                     "Interface was released.",
                     { cause: new ArduinoInterfaceInternals() });
                 error.stack = stacktrace;
-                reject(error);
-            }
-        }
-
-        for (const pin in this._state.pinChangeResponders)
-        {
-            for (const { reject, stacktrace } of this._state.pinChangeResponders[pin])
-            {
-                const error = new Error(
-                    "Interface was released.",
-                    { cause: new ArduinoInterfaceInternals() });
-                error.stack = stacktrace;
-                reject(error);
+                try { reject(error) }
+                catch (error) { console.error(error) }
             }
         }
 
         this._state = null;
+
+        this._dispatchEvent("release", { target: this });
+    }
+
+    /**
+    @template {keyof ArduinoInterfaceEventMap} const K
+    @param {K} type
+    @param {(this: unknown, ...args: ArduinoInterfaceEventMap[K]) => void} listener
+    @public*/ addEventListener(type, listener)
+    {
+        const listenerList = this._listeners[type];
+        if (listenerList === undefined) // @ts-ignore
+            this._listeners[type] = [listener];
+        else
+            listenerList.push(listener);
+    }
+
+    /**
+    @template {keyof ArduinoInterfaceEventMap} const K
+    @param {K} type
+    @param {(this: unknown, ...args: ArduinoInterfaceEventMap[K]) => void} listener
+    @public*/ removeEventListener(type, listener)
+    {
+        const listenerList = this._listeners[type];
+        if (listenerList === undefined)
+            return;
+
+        const index = listenerList.indexOf(listener);
+        if (index !== -1)
+            listenerList.splice(index, 1);
     }
 
     // MARK: Private
+    /**
+    @template {keyof ArduinoInterfaceEventMap} const K
+    @param {K} type
+    @param {ArduinoInterfaceEventMap[K]} parameters
+    @private*/ _dispatchEvent(type, ...parameters)
+    {
+        const listenerList = this._listeners[type];
+        if (listenerList === undefined)
+            return;
+
+        for (const listener of listenerList)
+        {
+            try { listener(...parameters) }
+            catch (error) { console.error(error) }
+        }
+    }
+
     /**
     @type {number}
     @private @readonly*/ static _CONTROL_BYTE = "".charCodeAt(0);
@@ -497,11 +638,13 @@ import * as NBT from "./nbt.js";
             return;
         }
 
+        console.log(this._state.getPinQueued);
+
         for (const pin in this._state.getPinQueued)
         {
             this._sendTag("get-pin", new NBT.CompoundTag(
             [
-                ["pin", new NBT.StringTag(pin)],
+                ["pin", new NBT.ByteTag(Number(pin))],
             ]));
 
             delete this._state.getPinModeQueued[pin];
@@ -512,7 +655,7 @@ import * as NBT from "./nbt.js";
         {
             this._sendTag("set-pin", new NBT.CompoundTag(
             [
-                ["pin", new NBT.StringTag(pin)],
+                ["pin", new NBT.ByteTag(Number(pin))],
                 ["is-high", new NBT.ByteTag(this._state.setPinQueued[pin])],
             ]));
 
@@ -524,7 +667,7 @@ import * as NBT from "./nbt.js";
         {
             this._sendTag("get-pin-mode", new NBT.CompoundTag(
             [
-                ["pin", new NBT.StringTag(pin)],
+                ["pin", new NBT.ByteTag(Number(pin))],
             ]));
 
             delete this._state.getPinModeQueued[pin];
@@ -535,7 +678,7 @@ import * as NBT from "./nbt.js";
         {
             this._sendTag("set-pin-mode", new NBT.CompoundTag(
             [
-                ["pin", new NBT.StringTag(pin)],
+                ["pin", new NBT.ByteTag(Number(pin))],
                 ["mode", new NBT.StringTag(this._state.setPinModeQueued[pin])],
             ]));
 
@@ -584,17 +727,62 @@ import * as NBT from "./nbt.js";
             throw new Error(
                 "Interface was released.");
 
-        this._blockQueue = false;
-        this._trySendNextQueued();
+        console.log(name, "/", tag);
 
         switch (name)
         {
+            case "+get-config":
+            {
+                let nameTag, pinsTag;
+                if (!(tag instanceof NBT.CompoundTag)
+                    || !((nameTag = tag.get("name")) instanceof NBT.StringTag)
+                    || !((pinsTag = tag.get("pins")) instanceof NBT.CompoundListTag))
+                    return console.error(
+                        "Arduino interface received malformed tag from Arduino:",
+                        name,
+                        tag);
+
+                /**
+                @type {ArduinoConfig["pins"]}
+                */ const pins = [];
+                for (const tag of pinsTag)
+                {
+                    let idTag, nameTag, modesTag;
+                    if (!(tag instanceof NBT.CompoundTag)
+                        || !((idTag = tag.get("id")) instanceof NBT.ByteTag)
+                        || !((nameTag = tag.get("name")) instanceof NBT.StringTag)
+                        || !((modesTag = tag.get("modes")) instanceof NBT.StringListTag)
+                        || !modesTag.value.some((v) => v === "digital-input")
+                        || !modesTag.value.some((v) => v === "digital-output"))
+                        return console.error(
+                            "Arduino interface received malformed tag from Arduino:",
+                            name,
+                            tag);
+
+                    pins[idTag.value] = { name: nameTag.value };
+                }
+
+                const config = { name: nameTag.value, pins };
+
+                if (!this._state.configResponder.done)
+                {
+                    for (const { resolve } of this._state.configResponder.value)
+                    {
+                        try { resolve(config) }
+                        catch (error) { console.error(error) }
+                    }
+                }
+
+                this._state.configResponder = { done: true, value: config };
+
+                break;
+            }
             case "+get-pin":
             {
                 let pinTag;
                 if (!(tag instanceof NBT.CompoundTag)
-                    || !((pinTag = tag.get("pin")) instanceof NBT.StringTag))
-                    return console.warn(
+                    || !((pinTag = tag.get("pin")) instanceof NBT.ByteTag))
+                    return console.error(
                         "Arduino interface received malformed tag from Arduino:",
                         name,
                         tag);
@@ -612,33 +800,37 @@ import * as NBT from "./nbt.js";
                     }
 
                     delete this._state.getPinResponders[pin];
-
-                    for (const { resolve } of this._state.pinChangeResponders[pin] ?? [])
-                    {
-                        try { resolve(isHigh) }
-                        catch (error) { console.error(error) }
-                    }
-
-                    delete this._state.pinChangeResponders[pin];
+                    delete this._state.getPinQueued[pin];
                 }
                 else if ((errorTag = tag.get("error")) instanceof NBT.StringTag)
                 {
+                    let fileTag, lineTag;
+                    if (!(tag instanceof NBT.CompoundTag)
+                        || !((fileTag = tag.get("file")) instanceof NBT.StringTag)
+                        || !((lineTag = tag.get("line")) instanceof NBT.IntTag))
+                        return console.error(
+                            "Arduino interface received malformed tag from Arduino:",
+                            name,
+                            tag);
+
                     const pin = pinTag.value;
                     const message = errorTag.value;
+                    const file = fileTag.value;
+                    const line = lineTag.value;
 
                     for (const { reject, stacktrace } of this._state.getPinResponders[pin] ?? [])
                     {
-                        const error = new ArduinoError(
-                            message,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
                     }
 
                     delete this._state.getPinResponders[pin];
+                    delete this._state.getPinQueued[pin];
                 }
                 else
-                    return console.warn(
+                    return console.error(
                         "Arduino interface received malformed tag from Arduino:",
                         name,
                         tag);
@@ -649,8 +841,8 @@ import * as NBT from "./nbt.js";
             {
                 let pinTag;
                 if (!(tag instanceof NBT.CompoundTag)
-                    || !((pinTag = tag.get("pin")) instanceof NBT.StringTag))
-                    return console.warn(
+                    || !((pinTag = tag.get("pin")) instanceof NBT.ByteTag))
+                    return console.error(
                         "Arduino interface received malformed tag from Arduino:",
                         name,
                         tag);
@@ -658,19 +850,30 @@ import * as NBT from "./nbt.js";
                 let errorTag;
                 if ((errorTag = tag.get("error")) instanceof NBT.StringTag)
                 {
+                    let fileTag, lineTag;
+                    if (!(tag instanceof NBT.CompoundTag)
+                        || !((fileTag = tag.get("file")) instanceof NBT.StringTag)
+                        || !((lineTag = tag.get("line")) instanceof NBT.IntTag))
+                        return console.error(
+                            "Arduino interface received malformed tag from Arduino:",
+                            name,
+                            tag);
+
                     const pin = pinTag.value;
                     const message = errorTag.value;
+                    const file = fileTag.value;
+                    const line = lineTag.value;
 
                     for (const { reject, stacktrace } of this._state.setPinResponders[pin] ?? [])
                     {
-                        const error = new ArduinoError(
-                            message,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
                     }
 
                     delete this._state.setPinResponders[pin];
+                    delete this._state.setPinQueued[pin];
                 }
                 else
                 {
@@ -683,6 +886,7 @@ import * as NBT from "./nbt.js";
                     }
 
                     delete this._state.setPinResponders[pin];
+                    delete this._state.setPinQueued[pin];
                 }
 
                 break;
@@ -691,8 +895,8 @@ import * as NBT from "./nbt.js";
             {
                 let pinTag;
                 if (!(tag instanceof NBT.CompoundTag)
-                    || !((pinTag = tag.get("pin")) instanceof NBT.StringTag))
-                    return console.warn(
+                    || !((pinTag = tag.get("pin")) instanceof NBT.ByteTag))
+                    return console.error(
                         "Arduino interface received malformed tag from Arduino:",
                         name,
                         tag);
@@ -710,25 +914,37 @@ import * as NBT from "./nbt.js";
                     }
 
                     delete this._state.getPinModeResponders[pin];
+                    delete this._state.getPinModeQueued[pin];
                 }
                 else if ((errorTag = tag.get("error")) instanceof NBT.StringTag)
                 {
+                    let fileTag, lineTag;
+                    if (!(tag instanceof NBT.CompoundTag)
+                        || !((fileTag = tag.get("file")) instanceof NBT.StringTag)
+                        || !((lineTag = tag.get("line")) instanceof NBT.IntTag))
+                        return console.error(
+                            "Arduino interface received malformed tag from Arduino:",
+                            name,
+                            tag);
+
                     const pin = pinTag.value;
                     const message = errorTag.value;
+                    const file = fileTag.value;
+                    const line = lineTag.value;
 
                     for (const { reject, stacktrace } of this._state.getPinModeResponders[pin] ?? [])
                     {
-                        const error = new ArduinoError(
-                            message,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
                     }
 
                     delete this._state.getPinModeResponders[pin];
+                    delete this._state.getPinModeQueued[pin];
                 }
                 else
-                    return console.warn(
+                    return console.error(
                         "Arduino interface received malformed tag from Arduino:",
                         name,
                         tag);
@@ -739,8 +955,8 @@ import * as NBT from "./nbt.js";
             {
                 let pinTag;
                 if (!(tag instanceof NBT.CompoundTag)
-                    || !((pinTag = tag.get("pin")) instanceof NBT.StringTag))
-                    return console.warn(
+                    || !((pinTag = tag.get("pin")) instanceof NBT.ByteTag))
+                    return console.error(
                         "Arduino interface received malformed tag from Arduino:",
                         name,
                         tag);
@@ -748,19 +964,30 @@ import * as NBT from "./nbt.js";
                 let errorTag;
                 if ((errorTag = tag.get("error")) instanceof NBT.StringTag)
                 {
+                    let fileTag, lineTag;
+                    if (!(tag instanceof NBT.CompoundTag)
+                        || !((fileTag = tag.get("file")) instanceof NBT.StringTag)
+                        || !((lineTag = tag.get("line")) instanceof NBT.IntTag))
+                        return console.error(
+                            "Arduino interface received malformed tag from Arduino:",
+                            name,
+                            tag);
+
                     const pin = pinTag.value;
                     const message = errorTag.value;
+                    const file = fileTag.value;
+                    const line = lineTag.value;
 
                     for (const { reject, stacktrace } of this._state.setPinModeResponders[pin] ?? [])
                     {
-                        const error = new ArduinoError(
-                            message,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
                     }
 
                     delete this._state.setPinModeResponders[pin];
+                    delete this._state.setPinModeQueued[pin];
                 }
                 else
                 {
@@ -773,6 +1000,7 @@ import * as NBT from "./nbt.js";
                     }
 
                     delete this._state.setPinModeResponders[pin];
+                    delete this._state.setPinModeQueued[pin];
                 }
 
                 break;
@@ -781,49 +1009,55 @@ import * as NBT from "./nbt.js";
             {
                 let pinTag, isHighTag;
                 if (!(tag instanceof NBT.CompoundTag)
-                    || !((pinTag = tag.get("pin")) instanceof NBT.StringTag)
+                    || !((pinTag = tag.get("pin")) instanceof NBT.ByteTag)
                     || !((isHighTag = tag.get("is-high")) instanceof NBT.ByteTag))
-                    return console.warn(
-                        "Arduino interface received malformed tag from Arduino:",
-                        name,
-                        tag);
-
-                const pin = pinTag.value;
-                const isHigh = isHighTag.asBoolean;
-
-                for (const { resolve } of this._state.pinChangeResponders[pin] ?? [])
-                {
-                    try { resolve(isHigh) }
-                    catch (error) { console.error(error) }
-                }
-
-                delete this._state.pinChangeResponders[pin];
-
-                break;
-            }
-            case "error":
-            {
-                let messageTag, pathTag;
-                if (!(tag instanceof NBT.CompoundTag)
-                    || !((messageTag = tag.get("message")) instanceof NBT.StringTag)
-                    || !((pathTag = tag.get("path")) instanceof NBT.StringTag))
                     return console.error(
                         "Arduino interface received malformed tag from Arduino:",
                         name,
                         tag);
 
-                const message = messageTag.value;
-                const path = pathTag.value;
+                this.getConfig().then((config) =>
+                {
+                    this._dispatchEvent(
+                        "pinChange",
+                        {
+                            target: this,
+                            pinId: pinTag.value,
+                            pin: config.pins[pinTag.value].name,
+                            pinIsHigh: isHighTag.asBoolean,
+                        });
+                })
+
+                break;
+            }
+            case "error":
+            {
+                let messageTag, pathTag, fileTag, lineTag;
+                if (!(tag instanceof NBT.CompoundTag)
+                    || !((messageTag = tag.get("message")) instanceof NBT.StringTag)
+                    || !((pathTag = tag.get("path")) instanceof NBT.StringTag)
+                    || !((fileTag = tag.get("file")) instanceof NBT.StringTag)
+                    || !((lineTag = tag.get("line")) instanceof NBT.IntTag))
+                    return console.error(
+                        "Arduino interface received malformed tag from Arduino:",
+                        name,
+                        tag);
+
+                const message = `'${pathTag.value}': ${messageTag.value}`;
+                const file = fileTag.value;
+                const line = lineTag.value;
+
+                let returnedError = false;
 
                 if (!this._state.configResponder.done)
                 {
                     for (const { reject, stacktrace } of this._state.configResponder.value)
                     {
-                        const error = new ArduinoError(
-                            `'${path}': ${message}`,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
+                        returnedError = true;
                     }
 
                     this._state.configResponder.value = [];
@@ -833,77 +1067,75 @@ import * as NBT from "./nbt.js";
                 {
                     for (const { reject, stacktrace } of this._state.getPinResponders[key])
                     {
-                        const error = new Error(
-                            `'${path}': ${message}`,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
+                        returnedError = true;
                     }
                 }
 
                 this._state.getPinResponders = {};
+                this._state.getPinQueued = {};
 
                 for (const key in this._state.setPinResponders)
                 {
                     for (const { reject, stacktrace } of this._state.setPinResponders[key])
                     {
-                        const error = new Error(
-                            `'${path}': ${message}`,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
+                        returnedError = true;
                     }
                 }
 
                 this._state.setPinResponders = {};
+                this._state.setPinQueued = {};
 
                 for (const key in this._state.getPinModeResponders)
                 {
                     for (const { reject, stacktrace } of this._state.getPinModeResponders[key])
                     {
-                        const error = new Error(
-                            `'${path}': ${message}`,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
+                        returnedError = true;
                     }
                 }
 
                 this._state.getPinModeResponders = {};
+                this._state.getPinModeQueued = {};
 
                 for (const key in this._state.setPinModeResponders)
                 {
                     for (const { reject, stacktrace } of this._state.setPinModeResponders[key])
                     {
-                        const error = new Error(
-                            `'${path}': ${message}`,
-                            { cause: new ArduinoInterfaceInternals() });
+                        const error = new ArduinoError(message, file, line);
                         error.stack = stacktrace;
-                        reject(error);
+                        try { reject(error) }
+                        catch (error) { console.error(error) }
+                        returnedError = true;
                     }
                 }
 
                 this._state.setPinModeResponders = {};
+                this._state.setPinModeQueued = {};
 
-                for (const key in this._state.pinChangeResponders)
-                {
-                    for (const { reject, stacktrace } of this._state.pinChangeResponders[key])
-                    {
-                        const error = new Error(
-                            `'${path}': ${message}`,
-                            { cause: new ArduinoInterfaceInternals() });
-                        error.stack = stacktrace;
-                        reject(error);
-                    }
-                }
+                if (!returnedError)
+                    console.error(new ArduinoError(message, file, line));
 
-                this._state.pinChangeResponders = {};
+                break;
             }
             default:
-                return console.warn(
+                return console.error(
                     "Arduino interface received unknown tag from Arduino:",
                     name,
                     tag);
         }
+
+        this._blockQueue = false;
+        this._trySendNextQueued();
     }
 }
