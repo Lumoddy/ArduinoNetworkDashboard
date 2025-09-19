@@ -8,6 +8,71 @@
   <script type="module" src="./js/base.js"></script>
 </head>
 <body>
-
+  <pin-device-panel>
+    <pin-device>
+      <pin-device-name contenteditable="plaintext-only"></pin-device-name>
+      <pin-device-model></pin-device-model>
+      <pin-device-pins>
+        <pin-indicator-switch
+          style="width: 64px; height: 86px;"
+          options="LOW, HIGH, UNUSED"
+          value="LOW">
+        </pin-indicator-switch>
+        <pin-indicator-switch
+          style="width: 64px; height: 86px;"
+          options="LOW, HIGH, UNUSED"
+          value="HIGH">
+        </pin-indicator-switch>
+        <pin-indicator-switch
+          style="width: 64px; height: 86px;"
+          options="LOW, HIGH, UNUSED"
+          value="UNUSED">
+        </pin-indicator-switch>
+        <pin-toggle-switch
+          style="width: 64px; height: 86px;"
+          on-text="HIGH"
+          off-text="LOW">
+        </pin-toggle-switch>
+        <pin-toggle-switch
+          style="width: 64px; height: 86px;"
+          on-text="HIGH"
+          off-text="LOW"
+          checked>
+        </pin-toggle-switch>
+        <pin-multi-switch
+          style="width: 64px; height: 86px;"
+          options="IN,, OUT"
+          value="IN">
+        </pin-multi-switch>
+        <pin-multi-switch
+          style="width: 64px; height: 86px;"
+          options="IN,, OUT"
+          value="OUT">
+        </pin-multi-switch>
+        <pin-multi-switch
+          style="width: 64px; height: 86px;"
+          options="IN,, OUT"
+          value="">
+        </pin-multi-switch>
+      </pin-device-pins>
+    </pin-device>
+  </pin-device-panel>
+  <edge-resizer></edge-resizer>
+  <div>
+    <pin-automation-panel>
+      <pin-automation>
+        <pin-automation-name contenteditable="plaintext-only"></pin-automation-name>
+      </pin-automation>
+    </pin-automation-panel>
+    <edge-resizer></edge-resizer>
+    <pin-settings-panel>
+      <pin-settings>
+        <pin-settings-name contenteditable="plaintext-only"></pin-settings-name>
+      </pin-settings>
+    </pin-settings-panel>
+  </div>
+  <overlay-layer>
+    
+  </overlay-layer>
 </body>
 </html>

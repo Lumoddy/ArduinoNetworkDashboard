@@ -801,6 +801,18 @@ import * as NBT from "./nbt.js";
 
                     delete this._state.getPinResponders[pin];
                     delete this._state.getPinQueued[pin];
+
+                    this.getConfig().then((config) =>
+                    {
+                        this._dispatchEvent(
+                            "pinChange",
+                            {
+                                target: this,
+                                pinId: pin,
+                                pin: config.pins[pin].name,
+                                pinIsHigh: isHigh,
+                            });
+                    });
                 }
                 else if ((errorTag = tag.get("error")) instanceof NBT.StringTag)
                 {
@@ -1026,7 +1038,7 @@ import * as NBT from "./nbt.js";
                             pin: config.pins[pinTag.value].name,
                             pinIsHigh: isHighTag.asBoolean,
                         });
-                })
+                });
 
                 break;
             }

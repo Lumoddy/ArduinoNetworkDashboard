@@ -1,6 +1,6 @@
-import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Deserializer, DeserializerError, PayloadDeserializer, PayloadSerializer, Serializer, Tag } from "./base.js";
+import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Tag } from "./base.js";
 /**
-@import { SerializationGenerator, DeserializationGenerator, SerializationConfig, DeserializationConfig } from "./base.js"
+@import { SerializationConfig, DeserializationConfig } from "./base.js"
 */
 
 // MARK: IntTag
@@ -24,6 +24,10 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
     @public*/ get value() { return this._value }
     /**
     @public*/ set value(value) { this._value = value & 0xFFFFFFFF }
+
+    /**
+    @returns {unknown}
+    @public @override*/ toJSON() { return this.value }
 }
 
 // MARK: Serializer

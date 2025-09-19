@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+
+:root
+{
+    --font-normal: "Inter", sans-serif;
+    --font-code: "JetBrains Mono", monospace;
+
+    --color-back: #2A2525;
+
+    --color-panel: #6C5F5C;
+
+    --color-line: #F3E6E2;
+
+    --color-active: #E9B045;
+
+    --color-inactive: #191615;
+
+    --border-radius: 16px;
+
+    --shadow-outset: #00000080 0px 4px 8px 0px;
+    --shadow-outset--large: #00000080 0px 4px 32px 0px;
+    --shadow-inset: #00000080 0px 4px 8px 0px inset;
+    --shadow-inset--large: #00000080 0px 4px 32px 0px inset;
+
+    background-color: hsl(from var(--color-back) calc(h + 20) calc(s * 2) calc(l / 2));
+    font-family: var(--font-normal);
+}

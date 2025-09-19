@@ -1,0 +1,94 @@
+
+@property --position { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+pin-multi-switch
+{
+    display: block;
+    position: relative;
+    background-color: hsl(from var(--color-back) calc(h + 10) calc(s * 1.5) calc(l / 1.5));
+    border-radius: var(--border-radius);
+    font-size: 22px;
+    font-weight: 600;
+    user-select: none;
+
+    & > pin-rail
+    {
+        display: block;
+        position: absolute;
+        top: 6px;
+        bottom: 6px;
+        left: 6px;
+        width: 18px;
+        background-color: var(--color-inactive);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-inset);
+
+        & > pin-knob
+        {
+            display: block;
+            position: absolute;
+            top: calc(var(--position) * (100% - 18px));
+            width: 18px;
+            height: 18px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-outset);
+            background-color: var(--color-panel);
+            transition: top 0.1s ease-out;
+        }
+    }
+
+    & > pin-text
+    {
+        position: absolute;
+        top: 6px;
+        bottom: 6px;
+        left: 26px;
+        right: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: hsl(from var(--color-inactive) calc(h - 40) calc(s / 3) calc(l * 3));
+        display: flex;
+        flex-flow: column nowrap;
+        justify-content: space-between;
+        align-items: stretch;
+
+        & > pin-label
+        {
+            height: 18px;
+            display: flex;
+            flex-flow: row nowrap;
+            justify-content: start;
+            align-items: center;
+            transition: color 0.1s ease-out 0.05s;
+
+            &.active
+            {
+                color: var(--color-active);
+            }
+        }
+    }
+
+    & > pin-overlay
+    {
+        position: absolute;
+        top: 0px;
+        bottom: 0px;
+        left: 0px;
+        right: 0px;
+        display: flex;
+        flex-flow: column nowrap;
+        justify-content: stretch;
+        align-items: stretch;
+
+        & > button
+        {
+            flex-grow: 1;
+            padding: 0;
+            border: none;
+            background-color: transparent;
+            font: inherit;
+            color: inherit;
+            cursor: pointer;
+        }
+    }
+}

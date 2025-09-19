@@ -29,6 +29,10 @@ import { IntPayloadSerializer, IntPayloadDeserializer } from "../int.js";
     /**
     @returns {ArrayIterator<bigint>}
     @public*/ [Symbol.iterator]() { return this.value[Symbol.iterator]() }
+
+    /**
+    @returns {unknown}
+    @public @override*/ toJSON() { return this.value }
 }
 
 // MARK: Serializer

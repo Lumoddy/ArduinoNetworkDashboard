@@ -39,6 +39,14 @@
     /**
     @returns {string}
     @public*/ get [Symbol.toStringTag]() { return "NBTTag"; }
+
+    /**
+    @returns {unknown}
+    @public @virtual*/ toJSON() { return undefined }
+
+    /**
+    @returns {this}
+    @public*/ toNBT() { return this }
 }
 
 /**

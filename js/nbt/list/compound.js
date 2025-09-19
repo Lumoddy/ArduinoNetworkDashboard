@@ -11,7 +11,7 @@ import { IntPayloadSerializer, IntPayloadDeserializer } from "../int.js";
 */ export class CompoundListTag extends ListTag
 {
     /**
-    @param {readonly (Iterable<[string, Tag]> | CompoundTag)[]} value
+    @param {readonly (Iterable<[string, { readonly toNBT: () => Tag }]> | CompoundTag)[]} value
     @public*/ constructor(value)
     {
         super();
@@ -29,6 +29,22 @@ import { IntPayloadSerializer, IntPayloadDeserializer } from "../int.js";
     /**
     @returns {ArrayIterator<CompoundTag>}
     @public*/ [Symbol.iterator]() { return this.value[Symbol.iterator]() }
+
+    /**
+    @returns {unknown}
+    @public @override*/ toJSON()
+    {
+        return this.value.map((x) =>
+        {
+            /**
+            @type {Record<string, Tag>}
+            */ const result = {};
+            for (const [name, tag] of x)
+                result[name] = tag;
+
+            return result;
+        })
+    }
 }
 
 // MARK: Serializer

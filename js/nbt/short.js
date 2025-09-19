@@ -1,6 +1,6 @@
-import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Deserializer, DeserializerError, PayloadDeserializer, PayloadSerializer, Serializer, Tag } from "./base.js";
+import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Tag } from "./base.js";
 /**
-@import { SerializationGenerator, DeserializationGenerator, SerializationConfig, DeserializationConfig } from "./base.js"
+@import { SerializationConfig, DeserializationConfig } from "./base.js"
 */
 
 // MARK: ShortTag
@@ -31,6 +31,10 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
         if ((this._value & 0x8000) !== 0)
             this._value -= 0x8000;
     }
+
+    /**
+    @returns {unknown}
+    @public @override*/ toJSON() { return this.value }
 }
 
 // MARK: Serializer

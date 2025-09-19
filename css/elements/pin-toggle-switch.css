@@ -1,0 +1,124 @@
+
+@property --position { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+pin-toggle-switch
+{
+    display: block;
+    position: relative;
+    background-color: var(--color-inactive);
+    border-radius: var(--border-radius);
+    user-select: none;
+    font-size: 22px;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--color-inactive) 100%, var(--color-line) 50%);
+    transition: background-color 0.1s ease-out 0.05s, color 0.1s ease-out 0.05s;
+
+    & > button
+    {
+        position: absolute;
+        padding: 0;
+        border: none;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+
+        & > pin-clip
+        {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+
+            &::after
+            {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-radius: var(--border-radius);
+                box-shadow: var(--shadow-inset);
+                content: '';
+            }
+
+            & > pin-center
+            {
+                position: absolute;
+                top: 0;
+                bottom: 60%;
+                left: 0;
+                right: 0;
+                transition: top 0.1s ease-out, bottom 0.1s ease-out;
+
+                & > pin-text
+                {
+                    position: absolute;
+                    height: 150%;
+                    left: 0;
+                    right: 0;
+                    display: flex;
+                    flex-flow: row nowrap;
+                    justify-content: center;
+                    align-items: center;
+
+                    &.on
+                    {
+                        position: absolute;
+                        bottom: 100%;
+                    }
+
+                    &.off
+                    {
+                        position: absolute;
+                        top: 100%;
+                    }
+                }
+            }
+        }
+
+        & > pin-knob
+        {
+            position: absolute;
+            top: 0;
+            bottom: 60%;
+            left: 0;
+            right: 0;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-outset);
+            background-color: var(--color-panel);
+            transition: top 0.1s ease-out, bottom 0.1s ease-out;
+        }
+    }
+}
+
+pin-toggle-switch:is([checked=""], [checked="true"])
+{
+    background-color: var(--color-active);
+    color: color-mix(in srgb, var(--color-active) 50%, var(--color-line) 100%);
+
+    & > button
+    {
+        & > pin-clip
+        {
+            & > pin-center
+            {
+                top: 60%;
+                bottom: 0;
+            }
+        }
+
+        & > pin-knob
+        {
+            top: 60%;
+            bottom: 0;
+        }
+    }
+}

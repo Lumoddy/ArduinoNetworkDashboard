@@ -1,0 +1,86 @@
+
+@property --position { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+pin-indicator-switch
+{
+    display: block;
+    position: relative;
+    background-color: hsl(from var(--color-back) calc(h + 10) calc(s * 1.5) calc(l / 1.5));
+    border-radius: var(--border-radius);
+    user-select: none;
+
+    & > pin-display
+    {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        right: 6px;
+        border-radius: calc(var(--border-radius) - 6px);
+        aspect-ratio: 1;
+        background-color: hsl(from var(--color-back) calc(h + 12) calc(s * 1.6) calc(l / 1.6));
+        font-size: 12px;
+        font-weight: 600;
+        color: hsl(from var(--color-back) calc(h - 20) calc(s / 2) calc(l * 2));
+        overflow: hidden;
+        transition: background-color 0.1s ease-out, color 0.1s ease-out;
+
+        &::after
+        {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            box-shadow: var(--shadow-inset);
+            content: '';
+        }
+
+        & > div
+        {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            right: 0px;
+            aspect-ratio: 1;
+            display: flex;
+            flex-flow: column nowrap;
+            justify-content: start;
+            align-items: start;
+
+            & > pin-label
+            {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-flow: row nowrap;
+                justify-content: center;
+                align-items: center;
+
+                &:first-child
+                {
+                    margin-top: calc(var(--position) * -100%);
+                    transition: margin-top 0.2s ease-out;
+                }
+            }
+        }
+    }
+}
+
+pin-indicator-switch[value="LOW"] > pin-display
+{
+    background-color: var(--color-inactive);
+    font-size: 18px;
+    color: color-mix(in srgb, var(--color-inactive) 100%, var(--color-line) 50%);
+}
+
+pin-indicator-switch[value="HIGH"] > pin-display
+{
+    background-color: var(--color-active);
+    font-size: 18px;
+    color: color-mix(in srgb, var(--color-active) 50%, var(--color-line) 100%);
+}
+
+pin-indicator-switch[value="UNUSED"] > pin-display
+{
+    font-size: 10px;
+}

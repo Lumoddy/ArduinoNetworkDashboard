@@ -1,4 +1,4 @@
-import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Deserializer, DeserializerError, PayloadDeserializer, PayloadSerializer, Serializer, Tag } from "./base.js";
+import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Tag } from "./base.js";
 /**
 @import { SerializationConfig, DeserializationConfig } from "./base.js"
 */
@@ -46,6 +46,10 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
     {
         this._value = value ? 1 : 0;
     }
+
+    /**
+    @returns {unknown}
+    @public @override*/ toJSON() { return this.value }
 }
 
 // MARK: Serializer

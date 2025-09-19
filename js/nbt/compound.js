@@ -1,17 +1,17 @@
-import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, Deserializer, DeserializerError, PayloadDeserializer, Serializer, SerializerError, Tag } from "./base.js";
+import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSerializer, AbstractSerializer, DeserializerError, SerializerError, Tag } from "./base.js";
 import { ByteArrayDeserializer, ByteArraySerializer, ByteArrayTag } from "./byte-array.js";
 import { ByteDeserializer, ByteSerializer, ByteTag } from "./byte.js";
 import { DoubleDeserializer, DoubleSerializer, DoubleTag } from "./double.js";
 import { FloatDeserializer, FloatSerializer, FloatTag } from "./float.js";
 import { IntArrayDeserializer, IntArraySerializer, IntArrayTag } from "./int-array.js";
-import { IntDeserializer, IntPayloadDeserializer, IntPayloadSerializer, IntSerializer, IntTag } from "./int.js";
+import { IntDeserializer, IntSerializer, IntTag } from "./int.js";
 import { ListDeserializer, ListSerializer, ListTag } from "./list.js";
 import { LongArrayDeserializer, LongArraySerializer, LongArrayTag } from "./long-array.js";
 import { LongDeserializer, LongSerializer, LongTag } from "./long.js";
 import { ShortDeserializer, ShortSerializer, ShortTag } from "./short.js";
 import { StringDeserializer, StringPayloadDeserializer, StringPayloadSerializer, StringSerializer, StringTag } from "./string.js";
 /**
-@import { SerializationGenerator, DeserializationGenerator, SerializationConfig, DeserializationConfig, TagUnion } from "./base.js"
+@import { SerializationConfig, DeserializationConfig, TagUnion } from "./base.js"
 */
 
 // MARK: CompoundTag
@@ -20,7 +20,7 @@ import { StringDeserializer, StringPayloadDeserializer, StringPayloadSerializer,
 */ export class CompoundTag extends Tag
 {
     /**
-    @param {Iterable<[string, Tag]>} [values]
+    @param {Iterable<[string, { readonly toNBT: () => Tag }]>} [values]
     @public*/ constructor(values)
     {
         super();
@@ -32,7 +32,7 @@ import { StringDeserializer, StringPayloadDeserializer, StringPayloadSerializer,
         if (values !== undefined)
         {
             for (const [key, value] of values)
-                this._value.set(key, value);
+                this._value.set(key, value.toNBT());
         }
     }
 
@@ -86,6 +86,19 @@ import { StringDeserializer, StringPayloadDeserializer, StringPayloadSerializer,
     /**
     @returns {MapIterator<Tag>}
     @public*/ values() { return this._value.values() }
+
+    /**
+    @returns {unknown}
+    @public @override*/ toJSON()
+    {
+        /**
+        @type {Record<string, Tag>}
+        */ const result = {};
+        for (const [name, tag] of this._value)
+            result[name] = tag;
+
+        return result;
+    }
 }
 
 // MARK: Serializer

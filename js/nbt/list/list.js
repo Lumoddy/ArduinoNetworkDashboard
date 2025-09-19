@@ -28,6 +28,10 @@ import { ListTag } from "./base.js";
     /**
     @returns {ArrayIterator<ListTag>}
     @public*/ [Symbol.iterator]() { return this.value[Symbol.iterator]() }
+
+    /**
+    @returns {unknown}
+    @public @override*/ toJSON() { return this.value.map((x) => x.toJSON()) }
 }
 
 // MARK: Serializer
