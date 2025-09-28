@@ -9,14 +9,14 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
 */ export class LongArrayTag extends Tag
 {
     /**
-    @param {BigInt64Array<ArrayBuffer>} value
+    @param {Iterable<bigint>} value
     @public*/ constructor(value)
     {
         super();
 
         /**
         @type {BigInt64Array<ArrayBuffer>}
-        @private*/ this._value = value;
+        @private*/ this._value = new BigInt64Array(value);
     }
 
     /**

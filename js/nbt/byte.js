@@ -14,15 +14,11 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
     {
         super();
 
-        switch (value)
-        {
-            case true: value = 1;
-            case false: value = 0;
-        }
-
         /**
         @type {number}
-        @private*/ this._value = value & 0xFF;
+        @private*/ this._value
+            // @ts-ignore: operator check.
+            = value & 0xFF;
         if ((this._value & 0x80) !== 0)
             this._value -= 0x100;
     }
@@ -44,7 +40,9 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
     /**
     @public*/ set asBoolean(value)
     {
-        this._value = value ? 1 : 0;
+        this._value
+            // @ts-ignore: operator check.
+            = value & 0xFF;
     }
 
     /**

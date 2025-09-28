@@ -16,14 +16,14 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
 
         /**
         @type {string}
-        @private*/ this._value = value;
+        @private*/ this._value = String(value);
     }
 
     /**
     @returns {string}
     @public*/ get value() { return this._value }
     /**
-    @public*/ set value(value) { this._value = value }
+    @public*/ set value(value) { this._value = String(value) }
 
     /**
     @returns {unknown}

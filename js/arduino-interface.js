@@ -5,7 +5,7 @@ import * as NBT from "./nbt.js";
 @typedef {
 {
     readonly name: string,
-    readonly pins: { name: string }[],
+    readonly pins: readonly { readonly id: number, readonly name: string }[],
 }
 } ArduinoConfig
 */
@@ -743,7 +743,7 @@ import * as NBT from "./nbt.js";
                         tag);
 
                 /**
-                @type {ArduinoConfig["pins"]}
+                @type {(ArduinoConfig["pins"][number] | undefined)[]}
                 */ const pins = [];
                 for (const tag of pinsTag)
                 {
@@ -759,10 +759,18 @@ import * as NBT from "./nbt.js";
                             name,
                             tag);
 
-                    pins[idTag.value] = { name: nameTag.value };
+                    pins[idTag.value] =
+                    {
+                        id: idTag.value,
+                        name: nameTag.value,
+                    };
                 }
 
-                const config = { name: nameTag.value, pins };
+                const config =
+                {
+                    name: nameTag.value,
+                    pins: pins.filter((x) => x !== undefined),
+                };
 
                 if (!this._state.configResponder.done)
                 {

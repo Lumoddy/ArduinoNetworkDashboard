@@ -1,6 +1,153 @@
-
 @import "./root.css";
-@import "./elements/pin-indicator-switch.css";
-@import "./elements/pin-multi-switch.css";
-@import "./elements/pin-toggle-switch.css";
-@import "./elements/page.css";
+
+button
+{
+    margin: 4px 2px 8px;
+    padding: 8px 12px;
+    border: none;
+    display: inline-flex;
+    border-radius: var(--border-radius);
+    flex-flow: row nowrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-line);
+    background-color: var(--color-block);
+    font-size: 18px;
+    font-family: var(--font-normal);
+    font-weight: 600;
+    box-shadow: var(--shadow-outset);
+    outline: var(--outline--hidden);
+    outline-offset: var(--outline-offset--hidden);
+    cursor: pointer;
+    user-select: none;
+    transition:
+        var(--transition-light--interact),
+        var(--transition-outline--hidden);
+
+    &:focus-visible
+    {
+        outline: var(--outline);
+        outline-offset: var(--outline-offset);
+        transition:
+            var(--transition-light--interact),
+            var(--transition-outline);
+    }
+
+    &:active
+    {
+        color: oklch(from var(--color-line) calc(l - 0.1) c h);
+        background-color: oklch(from var(--color-block) calc(l - 0.1) c h);
+        transition:
+            var(--transition-light--interact),
+            var(--transition-outline--hidden),
+            color 0s,
+            background-color 0s;
+    }
+}
+
+label:has(> input:is([type="checkbox"], [type="radio"]))
+{
+    margin: 4px 2px 8px;
+    padding: 8px 12px;
+    border: none;
+    display: inline-flex;
+    border-radius: var(--border-radius);
+    flex-flow: row nowrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-line);
+    background-color: var(--color-block);
+    font-size: 18px;
+    font-family: var(--font-normal);
+    font-weight: 600;
+    box-shadow: var(--shadow-outset);
+    outline: var(--outline--hidden);
+    outline-offset: var(--outline-offset--hidden);
+    cursor: pointer;
+    user-select: none;
+    transition:
+        var(--transition-light--interact),
+        var(--transition-outline--hidden);
+
+    & > input:only-of-type:is([type="checkbox"], [type="radio"])
+    {
+        margin: 0;
+        border: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background-color: var(--color-inset--down);
+        box-shadow: var(--shadow-inset--small);
+        appearance: none;
+        outline: none;
+        transition:
+            var(--transition-light--interact),
+            var(--transition-outline--hidden);
+        cursor: inherit;
+
+        &:checked
+        {
+            background-color: var(--color-inset--up);
+        }
+    }
+
+    &:has(> input:only-of-type:is([type="checkbox"], [type="radio"]):focus-visible)
+    {
+        outline: var(--outline);
+        outline-offset: var(--outline-offset);
+        transition:
+            var(--transition-light--interact),
+            var(--transition-outline);
+    }
+
+    &:active
+    {
+        color: oklch(from var(--color-line) calc(l - 0.1) c h);
+        background-color: oklch(from var(--color-block) calc(l - 0.1) c h);
+        transition:
+            var(--transition-light--interact),
+            var(--transition-outline--hidden),
+            color 0s,
+            background-color 0s;
+
+        & > input:only-of-type:is([type="checkbox"], [type="radio"])
+        {
+            background-color: oklch(from var(--color-inset--down) calc(l - 0.1) c h);
+            transition:
+                var(--transition-light--interact),
+                var(--transition-outline--hidden),
+                color 0s,
+                background-color 0s;
+
+            &:checked
+            {
+                background-color: oklch(from var(--color-inset--up) calc(l - 0.1) c h);
+            }
+        }
+
+        &:has(> input:only-of-type:is([type="checkbox"], [type="radio"]):focus-visible)
+        {
+            outline: var(--outline);
+            outline-offset: var(--outline-offset);
+            transition:
+                var(--transition-light--interact),
+                var(--transition-outline),
+                color 0s,
+                background-color 0s;
+        }
+    }
+
+    &:has(> input:only-child:is([type="checkbox"], [type="radio"]))
+    {
+        padding: 4px;
+        border-radius: 50%;
+
+        & > input:only-of-type:is([type="checkbox"], [type="radio"])
+        {
+            width: 24px;
+            height: 24px;
+        }
+    }
+}

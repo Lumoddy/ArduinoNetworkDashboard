@@ -9,14 +9,14 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
 */ export class ByteArrayTag extends Tag
 {
     /**
-    @param {Int8Array<ArrayBuffer>} value
+    @param {Iterable<number>} value
     @public*/ constructor(value)
     {
         super();
 
         /**
         @type {Int8Array<ArrayBuffer>}
-        @private*/ this._value = value;
+        @private*/ this._value = new Int8Array(value);
     }
 
     /**
@@ -38,7 +38,6 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
     /**
     @param {Int8Array<ArrayBuffer>} value
     @param {SerializationConfig} [config]
-
     @protected @override*/ *generator(value, config)
     {
         if (value.length > MAX_LIST_LENGTH)

@@ -1,78 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Arduino Network Dashboard</title>
-  <link rel="stylesheet" href="./css/base.css">
-  <script type="module" src="./js/base.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Network Dashboard</title>
+    <link rel="stylesheet" href="./css/base.css">
+    <script type="module" src="./js/base.js"></script>
+    <script type="module" src="./js/for/index.js"></script>
 </head>
 <body>
-  <pin-device-panel>
-    <pin-device>
-      <pin-device-name contenteditable="plaintext-only"></pin-device-name>
-      <pin-device-model></pin-device-model>
-      <pin-device-pins>
-        <pin-indicator-switch
-          style="width: 64px; height: 86px;"
-          options="LOW, HIGH, UNUSED"
-          value="LOW">
-        </pin-indicator-switch>
-        <pin-indicator-switch
-          style="width: 64px; height: 86px;"
-          options="LOW, HIGH, UNUSED"
-          value="HIGH">
-        </pin-indicator-switch>
-        <pin-indicator-switch
-          style="width: 64px; height: 86px;"
-          options="LOW, HIGH, UNUSED"
-          value="UNUSED">
-        </pin-indicator-switch>
-        <pin-toggle-switch
-          style="width: 64px; height: 86px;"
-          on-text="HIGH"
-          off-text="LOW">
-        </pin-toggle-switch>
-        <pin-toggle-switch
-          style="width: 64px; height: 86px;"
-          on-text="HIGH"
-          off-text="LOW"
-          checked>
-        </pin-toggle-switch>
-        <pin-multi-switch
-          style="width: 64px; height: 86px;"
-          options="IN,, OUT"
-          value="IN">
-        </pin-multi-switch>
-        <pin-multi-switch
-          style="width: 64px; height: 86px;"
-          options="IN,, OUT"
-          value="OUT">
-        </pin-multi-switch>
-        <pin-multi-switch
-          style="width: 64px; height: 86px;"
-          options="IN,, OUT"
-          value="">
-        </pin-multi-switch>
-      </pin-device-pins>
-    </pin-device>
-  </pin-device-panel>
-  <edge-resizer></edge-resizer>
-  <div>
-    <pin-automation-panel>
-      <pin-automation>
-        <pin-automation-name contenteditable="plaintext-only"></pin-automation-name>
-      </pin-automation>
-    </pin-automation-panel>
-    <edge-resizer></edge-resizer>
-    <pin-settings-panel>
-      <pin-settings>
-        <pin-settings-name contenteditable="plaintext-only"></pin-settings-name>
-      </pin-settings>
-    </pin-settings-panel>
-  </div>
-  <overlay-layer>
     
-  </overlay-layer>
+    <pin-switch pin-mode="input"></pin-switch>
+    <pin-switch pin-mode="ignore"></pin-switch>
+    <pin-switch pin-mode="output"></pin-switch>
+    <pin-mode-switch pin-mode="input"></pin-mode-switch>
+    <pin-mode-switch pin-mode="ignore"></pin-mode-switch>
+    <pin-mode-switch pin-mode="output"></pin-mode-switch>
+    <label><span>Test1</span><input type="checkbox" autocomplete="off"></label>
+    <label><span>Test2</span><input type="checkbox" autocomplete="off"></label>
+    <label><input type="checkbox" autocomplete="off"></label>
+    <label><input type="radio" name="test" autocomplete="off"></label>
+    <label><input type="radio" name="test" autocomplete="off"></label>
+    <label><input type="radio" name="test" autocomplete="off"></label>
+    <button>Button</button>
+    <button>Button</button>
 </body>
 </html>

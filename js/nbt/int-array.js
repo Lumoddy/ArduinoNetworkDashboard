@@ -9,14 +9,14 @@ import { AbstractDeserializer, AbstractPayloadDeserializer, AbstractPayloadSeria
 */ export class IntArrayTag extends Tag
 {
     /**
-    @param {Int32Array<ArrayBuffer>} value
+    @param {Iterable<number>} value
     @public*/ constructor(value)
     {
         super();
 
         /**
         @type {Int32Array<ArrayBuffer>}
-        @private*/ this._value = value;
+        @private*/ this._value = new Int32Array(value);
     }
 
     /**

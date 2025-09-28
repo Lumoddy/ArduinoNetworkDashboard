@@ -32,7 +32,7 @@ import { StringDeserializer, StringPayloadDeserializer, StringPayloadSerializer,
         if (values !== undefined)
         {
             for (const [key, value] of values)
-                this._value.set(key, value.toNBT());
+                this._value.set(String(key), value.toNBT());
         }
     }
 

@@ -5,23 +5,43 @@
     --font-normal: "Inter", sans-serif;
     --font-code: "JetBrains Mono", monospace;
 
-    --color-back: #2A2525;
+    --color-panel: oklch(0.3 0.005 40);
+    --color-block: oklch(0.5 0.01 40);
+    --color-inset: oklch(0.25 0.005 40);
+    --color-line: oklch(1 0 0);
 
-    --color-panel: #6C5F5C;
+    --color-block--down: oklch(0.5 0.01 40);
+    --color-block--up: oklch(0.9 0.08 80);
 
-    --color-line: #F3E6E2;
+    --color-inset--down: oklch(0.2 0.005 40);
+    --color-inset--up: oklch(0.8 0.13 80);
 
-    --color-active: #E9B045;
-
-    --color-inactive: #191615;
+    --color-line--down: oklch(0.45 0.01 40);
+    --color-line--up: oklch(0.95 0.08 80);
 
     --border-radius: 16px;
 
     --shadow-outset: #00000080 0px 4px 8px 0px;
+    --shadow-outset--small: #00000080 0px 2px 6px 0px;
     --shadow-outset--large: #00000080 0px 4px 32px 0px;
     --shadow-inset: #00000080 0px 4px 8px 0px inset;
+    --shadow-inset--small: #00000080 0px 2px 6px 0px inset;
     --shadow-inset--large: #00000080 0px 4px 32px 0px inset;
 
-    background-color: hsl(from var(--color-back) calc(h + 20) calc(s * 2) calc(l / 2));
+    --outline: solid var(--color-line) 3px;
+    --outline-offset: 4px;
+    --outline--hidden: solid oklch(from var(--color-line) l c h / 0) 0px;
+    --outline-offset--hidden: 12px;
+
+    --transition-light: color 0s, background-color 0s;
+    --transition-light--interact: color ease-out 0.1s, background-color ease-out 0.1s;
+    --transition-light--fade: color ease-out 0.3s, background-color ease-out 0.3s;
+
+    --transition-outline: outline ease-out 0s;
+    --transition-outline--hidden: outline ease-in 0.1s, outline-offset ease-in 0.1s;
+
+    background-color: oklch(from var(--color-panel) calc(l - 0.1) c h);
     font-family: var(--font-normal);
+    color-scheme: dark;
+    color: var(--color-line);
 }
