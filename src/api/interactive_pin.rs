@@ -1,7 +1,7 @@
 use core::ptr;
 use arduino_hal::hal::port;
 use arduino_hal::port::{mode, PinOps};
-use crate::json::{self, StringVisitor, Visitor};
+use crate::smf;
 
 #[derive(Clone, Copy)]
 pub enum PinGetPowerError { }
@@ -183,26 +183,38 @@ impl<PIN: PinOps> PinModeInteraction for InteractivePin<PIN>
     }
 }
 
-impl TryFrom<&str> for PinMode
+impl TryFrom<u8> for PinMode
 {
     type Error = ();
 
-    fn try_from(value: &str) -> Result<Self, Self::Error>
+    fn try_from(value: u8) -> Result<Self, Self::Error>
     {
         match value
         {
-            "input" | "digital-input" => Ok(PinMode::DigitalInput),
-            "output" | "digital-output" => Ok(PinMode::DigitalOutput),
+            0 => Ok(PinMode::DigitalInput),
+            1 => Ok(PinMode::DigitalOutput),
             _ => Err(()),
         }
     }
 }
 
-impl From<PinMode> for &'static str
+impl From<PinMode> for u8
 {
     fn from(value: PinMode) -> Self
     {
         match value
+        {
+            PinMode::DigitalInput => 0,
+            PinMode::DigitalOutput => 1,
+        }
+    }
+}
+
+impl PinMode
+{
+    pub fn name(&self) -> &'static str
+    {
+        match self
         {
             PinMode::DigitalInput => "digital-input",
             PinMode::DigitalOutput => "digital-output",
@@ -210,40 +222,25 @@ impl From<PinMode> for &'static str
     }
 }
 
-impl json::IntoJSON for PinMode
+impl smf::FromSMF for PinMode
 {
-    fn into_json<T: json::ValueTracer>(self, tracer: T) -> Result<T::Return, T::Error>
+    fn from_smf<V: smf::ValueVisitor>(visitor: V) -> Result<(Self, V), V::Error>
     {
-        tracer.str(self.into())
+        let (byte, visitor) = visitor.u8()?;
+        match byte.try_into()
+        {
+            Ok(id) => Ok((id, visitor)),
+            Err(()) => Err(visitor.into_invalid_value_err(
+                "invalid",
+                "pin mode")),
+        }
     }
 }
 
-impl json::FromJSON for PinMode
+impl smf::IntoSMF for PinMode
 {
-    fn from_json<V: json::ValueVisitor>(visitor: V) -> Result<(Self, V::Return), V::Error>
+    fn into_smf<T: smf::ValueTracer>(self, tracer: T) -> Result<T, T::Error>
     {
-        match visitor.value()?
-        {
-            json::TypedValueVisitor::Object(visitor) => return Err(
-                visitor.into_invalid_value_err("object", "pin mode")),
-            json::TypedValueVisitor::Array(visitor) => return Err(
-                visitor.into_invalid_value_err("array", "pin mode")),
-            json::TypedValueVisitor::String(visitor) =>
-            {
-                let (pin, visitor) = visitor.collect_string::<16>()?;
-                match pin.as_str().try_into()
-                {
-                    Ok(pin) => Ok((pin, visitor)),
-                    Err(()) => return Err(
-                        visitor.into_invalid_value_err("invalid pin mode", "pin mode")),
-                }
-            },
-            json::TypedValueVisitor::Number(visitor) => return Err(
-                visitor.into_invalid_value_err("number", "pin mode")),
-            json::TypedValueVisitor::Boolean(visitor) => return Err(
-                visitor.into_invalid_value_err("boolean", "pin mode")),
-            json::TypedValueVisitor::Null(visitor) => return Err(
-                visitor.into_invalid_value_err("null", "pin mode")),
-        }
+        tracer.u8(self.into())
     }
 }

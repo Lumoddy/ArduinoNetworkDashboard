@@ -1,4 +1,4 @@
-use crate::json::{self, NumberVisitor, StringVisitor, Visitor};
+use crate::smf;
 
 #[derive(Clone, Copy)]
 pub enum InteractivePinID
@@ -67,40 +67,53 @@ impl From<InteractivePinID> for u8
     }
 }
 
-impl json::IntoJSON for InteractivePinID
+impl InteractivePinID
 {
-    fn into_json<T: json::ValueTracer>(self, tracer: T) -> Result<T::Return, T::Error>
+    pub fn name(&self) -> &'static str
     {
-        tracer.number_u8(self.into())
+        match self
+        {
+            InteractivePinID::D2 => "D2",
+            InteractivePinID::D3 => "D3",
+            InteractivePinID::D4 => "D4",
+            InteractivePinID::D5 => "D5",
+            InteractivePinID::D6 => "D6",
+            InteractivePinID::D7 => "D7",
+            InteractivePinID::D8 => "D8",
+            InteractivePinID::D9 => "D9",
+            InteractivePinID::D10 => "D10",
+            InteractivePinID::D11 => "D11",
+            InteractivePinID::D12 => "D12",
+            InteractivePinID::D13 => "D13",
+            InteractivePinID::A0 => "A0",
+            InteractivePinID::A1 => "A1",
+            InteractivePinID::A2 => "A2",
+            InteractivePinID::A3 => "A3",
+            InteractivePinID::A4 => "A4",
+            InteractivePinID::A5 => "A5",
+        }
     }
 }
 
-impl json::FromJSON for InteractivePinID
+impl smf::FromSMF for InteractivePinID
 {
-    fn from_json<V: json::ValueVisitor>(visitor: V) -> Result<(Self, V::Return), V::Error>
+    fn from_smf<V: smf::ValueVisitor>(visitor: V) -> Result<(Self, V), V::Error>
     {
-        match visitor.value()?
+        let (byte, visitor) = visitor.u8()?;
+        match byte.try_into()
         {
-            json::TypedValueVisitor::Object(visitor) => return Err(
-                visitor.into_invalid_value_err("object", "pin id")),
-            json::TypedValueVisitor::Array(visitor) => return Err(
-                visitor.into_invalid_value_err("array", "pin id")),
-            json::TypedValueVisitor::String(visitor) => return Err(
-                visitor.into_invalid_value_err("string", "pin id")),
-            json::TypedValueVisitor::Number(visitor) =>
-            {
-                let (pin, visitor) = visitor.collect_u8()?;
-                match pin.try_into()
-                {
-                    Ok(pin) => Ok((pin, visitor)),
-                    Err(()) => return Err(
-                        visitor.into_invalid_value_err("invalid pin", "pin id")),
-                }
-            },
-            json::TypedValueVisitor::Boolean(visitor) => return Err(
-                visitor.into_invalid_value_err("boolean", "pin id")),
-            json::TypedValueVisitor::Null(visitor) => return Err(
-                visitor.into_invalid_value_err("null", "pin id")),
+            Ok(id) => Ok((id, visitor)),
+            Err(()) => Err(visitor.into_invalid_value_err(
+                "invalid",
+                "pin id")),
         }
+    }
+}
+
+impl smf::IntoSMF for InteractivePinID
+{
+    fn into_smf<T: smf::ValueTracer>(self, tracer: T) -> Result<T, T::Error>
+    {
+        tracer.u8(self.into())
     }
 }

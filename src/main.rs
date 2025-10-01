@@ -4,7 +4,7 @@
 #![feature(abi_avr_interrupt)]
 
 mod panic_handler;
-mod json;
+mod smf;
 mod api;
 
 use api::InteractivePinID;
@@ -20,10 +20,9 @@ use arduino_hal::prelude::_embedded_hal_serial_Read;
 use arduino_hal::prelude::_embedded_hal_serial_Write;
 use arduino_hal::prelude::_unwrap_infallible_UnwrapInfallible;
 use arduino_hal::DefaultClock;
-use json::IntoJSON;
-use json::ObjectTracer;
-use json::ReaderError;
-use json::ValueTracer;
+use smf::IntoSMF;
+use smf::ReaderError;
+use smf::ValueTracer;
 use nb::block;
 mod interactive;
 
@@ -71,7 +70,6 @@ fn process() -> !
     // https://symbl.cc/en/unicode-table/
     const CONTROL_BYTE: u8 = b'';
     const START_TEXT_BYTE: u8 = b'';
-    const END_TEXT_BYTE: u8 = b'';
 
     #[derive(Clone, Copy)]
     enum _ReadError
@@ -123,10 +121,10 @@ fn process() -> !
         }
     };
 
-    fn read_json<T: json::FromJSON>(f: &mut impl FnMut() -> Result<u8, _ReadError>)
-        -> Result<T, json::ReaderError<_ReadError>>
+    fn read_smf<T: smf::FromSMF>(f: &mut impl FnMut() -> Result<u8, _ReadError>)
+        -> Result<T, smf::ReaderError<_ReadError>>
     {
-        T::from_json(json::Reader::new(move || f())).map(|x| x.0)
+        T::from_smf(smf::Reader::new(move || f())).map(|x| x.0)
     }
 
     let mut write_byte = move |byte|
@@ -147,12 +145,12 @@ fn process() -> !
         Ok::<(), _WriteError>(())
     };
 
-    fn write_json<T: json::IntoJSON>(
+    fn write_smf<T: smf::IntoSMF>(
         f: &mut impl FnMut(u8) -> Result<(), _WriteError>,
         value: T)
-        -> Result<(), json::WriterError<_WriteError>>
+        -> Result<(), smf::WriterError<_WriteError>>
     {
-        T::into_json(value, json::Writer::new(move |byte| f(byte))).map(|_| ())
+        T::into_smf(value, smf::Writer::new(move |byte| f(byte))).map(|_| ())
     }
 
     loop
@@ -165,28 +163,9 @@ fn process() -> !
             {
                 infallible_scope(||
                 {
-                    struct _Message
-                    {
-                        pin: InteractivePinID,
-                        is_high: bool,
-                    }
-
-                    impl IntoJSON for _Message
-                    {
-                        fn into_json<T: json::ValueTracer>(self, tracer: T)
-                            -> Result<T::Return, T::Error>
-                        {
-                            tracer.object()?
-                                .entry_key("type")?.str("pin-changed")?
-                                .entry_key("pin-id")?.number_u8(self.pin.into())?
-                                .entry_key("is-high")?.bool(self.is_high)?
-                                .end()
-                        }
-                    }
-
                     block!(raw_serial_writer.write(CONTROL_BYTE))?;
                     block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                    match write_json(&mut write_byte, _Message
+                    match write_smf(&mut write_byte, ResponseMessage::PinChanged
                     {
                         pin,
                         is_high,
@@ -194,8 +173,6 @@ fn process() -> !
                     {
                         Ok(()) => (),
                     }
-                    block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                    block!(raw_serial_writer.write(END_TEXT_BYTE))?;
 
                     Ok(())
                 });
@@ -235,14 +212,12 @@ fn process() -> !
                         {
                             block!(raw_serial_writer.write(CONTROL_BYTE))?;
                             block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-                            match write_json(
+                            match write_smf(
                                 &mut write_byte,
-                                ResponseMessage::InvalidControlByteError { char_index: 0, byte })
+                                ResponseMessage::InvalidControlByteError { byte_index: 0, byte })
                             {
                                 Ok(()) => (),
                             }
-                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
-                            block!(raw_serial_writer.write(END_TEXT_BYTE))?;
 
                             Ok(())
                         });
@@ -254,7 +229,7 @@ fn process() -> !
             _ => continue,
         }
 
-        let response = match read_json(&mut read_byte)
+        let response = match read_smf(&mut read_byte)
         {
             Ok(RequestMessage::GetConfig) =>
             {
@@ -293,45 +268,25 @@ fn process() -> !
                     Ok(()) => ResponseMessage::SetPinModeOk { pin },
                 }
             },
-            Err(ReaderError::Source { char_index, error: _ReadError::FoundControlByte(byte) }) =>
+            Err(ReaderError::Inner { byte_index, error: _ReadError::FoundControlByte(byte) }) =>
             {
-                ResponseMessage::InvalidControlByteError { char_index, byte }
+                ResponseMessage::InvalidControlByteError { byte_index, byte }
             },
-            Err(ReaderError::Source { char_index, error: _ReadError::TimedOut }) =>
+            Err(ReaderError::Inner { byte_index, error: _ReadError::TimedOut }) =>
             {
-                ResponseMessage::TimedOutError { char_index }
+                ResponseMessage::TimedOutError { byte_index }
             },
-            Err(ReaderError::InvalidUTF8 { char_index }) =>
+            Err(ReaderError::CollectOverflow { byte_index, capacity }) =>
             {
-                ResponseMessage::InvalidUTF8Error { char_index }
+                ResponseMessage::CollectOverflowError { byte_index, capacity }
             },
-            Err(ReaderError::InvalidSyntax { char_index, found, expected }) =>
+            Err(ReaderError::InvalidSyntax { byte_index, found, expected }) =>
             {
-                ResponseMessage::InvalidSyntaxError { char_index, found, expected }
+                ResponseMessage::InvalidSyntaxError { byte_index, found, expected }
             },
-            Err(ReaderError::InvalidValue { char_index, found, expected }) =>
+            Err(ReaderError::InvalidValue { byte_index, found, expected }) =>
             {
-                ResponseMessage::InvalidValueError { char_index, found, expected }
-            },
-            Err(ReaderError::FieldNotFound { char_index, expected }) =>
-            {
-                ResponseMessage::FieldNotFoundError { char_index, expected }
-            },
-            Err(ReaderError::DuplicateField { char_index, found }) =>
-            {
-                ResponseMessage::DuplicateFieldError { char_index, found }
-            },
-            Err(ReaderError::InvalidField { char_index }) =>
-            {
-                ResponseMessage::InvalidFieldError { char_index }
-            },
-            Err(ReaderError::NumberOverflow { char_index, size }) =>
-            {
-                ResponseMessage::NumberOverflowError { char_index, size }
-            },
-            Err(ReaderError::StringOverflow { char_index, capacity }) =>
-            {
-                ResponseMessage::StringOverflowError { char_index, capacity }
+                ResponseMessage::InvalidValueError { byte_index, found, expected }
             },
         };
 
@@ -339,12 +294,10 @@ fn process() -> !
         {
             block!(raw_serial_writer.write(CONTROL_BYTE))?;
             block!(raw_serial_writer.write(START_TEXT_BYTE))?;
-            match write_json(&mut write_byte, response)
+            match write_smf(&mut write_byte, response)
             {
                 Ok(()) => (),
             }
-            block!(raw_serial_writer.write(CONTROL_BYTE))?;
-            block!(raw_serial_writer.write(END_TEXT_BYTE))?;
 
             Ok(())
         });
