@@ -1,0 +1,47 @@
+
+arduino-interface-panel
+{
+    padding: 8px;
+    border-radius: var(--border-radius);
+    display: block;
+    background: var(--color-panel);
+
+    > .header
+    {
+        display: flex;
+        flex-flow: row nowrap;
+        align-items: stretch;
+        justify-content: stretch;
+
+        > .title
+        {
+            flex: 1;
+        }
+
+        > .buttons
+        {
+            
+        }
+    }
+
+    > .pin-container
+    {
+        display: flex;
+        flex-flow: row wrap;
+        align-items: start;
+        justify-content: start;
+
+        > .pin
+        {
+            display: flex;
+            flex-flow: column nowrap;
+            align-items: center;
+            justify-content: stretch;
+
+            > *
+            {
+                margin: 0;
+            }
+        }
+    }
+}

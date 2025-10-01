@@ -5,24 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arduino Network Dashboard</title>
     <link rel="stylesheet" href="./css/base.css">
+    <link rel="stylesheet" href="./css/for/index.css">
     <script type="module" src="./js/base.js"></script>
     <script type="module" src="./js/for/index.js"></script>
 </head>
 <body>
-    
-    <pin-switch pin-mode="input"></pin-switch>
-    <pin-switch pin-mode="ignore"></pin-switch>
-    <pin-switch pin-mode="output"></pin-switch>
-    <pin-mode-switch pin-mode="input"></pin-mode-switch>
-    <pin-mode-switch pin-mode="ignore"></pin-mode-switch>
-    <pin-mode-switch pin-mode="output"></pin-mode-switch>
-    <label><span>Test1</span><input type="checkbox" autocomplete="off"></label>
-    <label><span>Test2</span><input type="checkbox" autocomplete="off"></label>
-    <label><input type="checkbox" autocomplete="off"></label>
-    <label><input type="radio" name="test" autocomplete="off"></label>
-    <label><input type="radio" name="test" autocomplete="off"></label>
-    <label><input type="radio" name="test" autocomplete="off"></label>
-    <button>Button</button>
-    <button>Button</button>
+    <div id="device-list"></div>
+    <button id="new-device">New Device</button>
 </body>
 </html>

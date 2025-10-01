@@ -12,9 +12,8 @@ import { html } from "../common.js";
             margin: 4px 2px 8px;
             width: 64px;
             height: 26px;
-            display: inline-block;
+            display: inline-flex;
             user-select: none;
-            display: flex;
             flex-flow: row nowrap;
             gap: 2px;
             justify-content: stretch;
@@ -122,11 +121,11 @@ import { html } from "../common.js";
 
         /**
         @type {PinMode}
-        @public*/ this._oldMode = init.oldMode;
+        @private*/ this._oldMode = init.oldMode;
 
         /**
         @type {PinMode}
-        @public*/ this._newMode = init.newMode;
+        @private*/ this._newMode = init.newMode;
     }
 
     /**
@@ -135,24 +134,18 @@ import { html } from "../common.js";
     {
         if (!(super.target instanceof PinModeSwitch))
             throw new TypeError(
-                "PinModeSwitchChangeEvent can only be used on PinModeSwitch");
+                "PinModeSwitchChangeEvent can only be used on PinModeSwitch.");
 
         return super.target;
     }
 
     /**
     @returns {PinMode}
-    @public @readonly*/ get oldMode()
-    {
-        return this._oldMode;
-    }
+    @public @readonly*/ get oldMode() { return this._oldMode }
 
     /**
     @returns {PinMode}
-    @public @readonly*/ get newMode()
-    {
-        return this._newMode;
-    }
+    @public @readonly*/ get newMode() { return this._newMode }
 }
 
 /**
@@ -215,15 +208,6 @@ import { html } from "../common.js";
         {
             case "pin-mode":
             {
-                const inputs = this._shadowRoot.querySelectorAll(
-                    ":host > label > input");
-                for (let i = 0; i < inputs.length; i++)
-                {
-                    const input = inputs[i];
-                    if (input instanceof HTMLInputElement)
-                        input.checked = false;
-                }
-
                 /**
                 @type {PinMode}
                 */ let oldMode;
@@ -242,6 +226,15 @@ import { html } from "../common.js";
                     case "input": newMode = "input"; break;
                     case "output": newMode = "output"; break;
                     default: newMode = "ignore"; break;
+                }
+
+                const otherInputs = this._shadowRoot.querySelectorAll(
+                    `:host > label > input:not([value="${newMode}"])`);
+                for (let i = 0; i < otherInputs.length; i++)
+                {
+                    const input = otherInputs[i];
+                    if (input instanceof HTMLInputElement)
+                        input.checked = false;
                 }
 
                 const input = this._shadowRoot.querySelector(

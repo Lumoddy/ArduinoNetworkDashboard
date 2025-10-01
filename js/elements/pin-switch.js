@@ -226,11 +226,11 @@ import { html } from "../common.js";
 
         /**
         @type {boolean}
-        @public*/ this._wasHigh = init.wasHigh;
+        @private*/ this._wasHigh = init.wasHigh;
 
         /**
         @type {boolean}
-        @public*/ this._isHigh = init.isHigh;
+        @private*/ this._isHigh = init.isHigh;
     }
 
     /**
@@ -239,24 +239,18 @@ import { html } from "../common.js";
     {
         if (!(super.target instanceof PinSwitch))
             throw new TypeError(
-                "PinSwitchChangeEvent can only be used on PinSwitch");
+                "PinSwitchChangeEvent can only be used on PinSwitch.");
 
         return super.target;
     }
 
     /**
     @returns {boolean}
-    @public @readonly*/ get wasHigh()
-    {
-        return this._wasHigh;
-    }
+    @public @readonly*/ get wasHigh() { return this._wasHigh }
 
     /**
     @returns {boolean}
-    @public @readonly*/ get isHigh()
-    {
-        return this._isHigh;
-    }
+    @public @readonly*/ get isHigh() { return this._isHigh }
 }
 
 /**
