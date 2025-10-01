@@ -346,15 +346,18 @@ import { html } from "../common.js";
                 if (input instanceof HTMLInputElement)
                     input.checked = isHigh;
 
-                this.dispatchEvent(new PinSwitchChangeEvent(
-                    "change",
-                    {
-                        wasHigh,
-                        isHigh,
-                        bubbles: true,
-                        cancelable: false,
-                        composed: false,
-                    }));
+                if (this.getAttribute("pin-mode") === "output")
+                {
+                    this.dispatchEvent(new PinSwitchChangeEvent(
+                        "change",
+                        {
+                            wasHigh,
+                            isHigh,
+                            bubbles: true,
+                            cancelable: false,
+                            composed: false,
+                        }));
+                }
 
                 break;
             }

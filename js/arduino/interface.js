@@ -60,7 +60,7 @@ import { arduinoResponseDeserializer } from "./response.js";
             readonly target: ArduinoInterface,
             readonly pinId: number,
             readonly pinName: string,
-            readonly isHigh: boolean,
+            readonly pinIsHigh: boolean,
         },
     ],
 }
@@ -525,7 +525,7 @@ import { arduinoResponseDeserializer } from "./response.js";
                     const
                     {
                         pin: pinId,
-                        isHigh,
+                        isHigh: pinIsHigh,
                     }
                     = response;
 
@@ -546,7 +546,7 @@ import { arduinoResponseDeserializer } from "./response.js";
                             target: this,
                             pinId,
                             pinName,
-                            isHigh,
+                            pinIsHigh,
                         };
 
                         for (const listener of this._eventListeners["pin-change"])
@@ -665,6 +665,10 @@ import { arduinoResponseDeserializer } from "./response.js";
     }
 
     // MARK: Interface
+    /**
+    @returns {SerialPort}
+    @public @readonly*/ get port() { return this._port }
+
     /**
     @param {unknown} reason
     @param {string} [context]
@@ -989,6 +993,47 @@ import { arduinoResponseDeserializer } from "./response.js";
 
             this._unpauseQueue?.();
         });
+    }
+
+    /**
+    @template {keyof ArduinoInterfaceEventMap} const K
+    @param {K} type
+    @param {(this: unknown, ...args: ArduinoInterfaceEventMap[K]) => void} listener
+    @public*/ addEventListener(type, listener)
+    {
+        switch (type)
+        {
+            case "pin-change":
+            case "release":
+                this._eventListeners[type].push(listener);
+                break;
+            default:
+                throw new TypeError(
+                    `'${type}' is not a valid event type.`);
+        }
+    }
+
+    /**
+    @template {keyof ArduinoInterfaceEventMap} const K
+    @param {K} type
+    @param {(this: unknown, ...args: ArduinoInterfaceEventMap[K]) => void} listener
+    @public*/ removeEventListener(type, listener)
+    {
+        switch (type)
+        {
+            case "pin-change":
+            case "release":
+            {
+                const index = this._eventListeners[type].indexOf(listener);
+                if (index !== -1)
+                    this._eventListeners[type].splice(index, 1);
+
+                break;
+            }
+            default:
+                throw new TypeError(
+                    `'${type}' is not a valid event type.`);
+        }
     }
 }
 // @ts-ignore: Allow use in debug console.

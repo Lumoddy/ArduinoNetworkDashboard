@@ -14,10 +14,10 @@ _newDevice.addEventListener("click", async () =>
     if (port.readable === null)
         await port.open({ baudRate: 9600 });
 
+    const arduinoInterface = new ArduinoInterface(port);
+
     const devicePanel = /** @type {ArduinoInterfacePanel} */(
         _deviceListElement.appendChild(document.createElement("arduino-interface-panel")));
-
-    const arduinoInterface = new ArduinoInterface(port);
 
     // @ts-ignore: allow use in debug console.
     devicePanel.arduinoInterface = arduinoInterface
@@ -26,7 +26,7 @@ _newDevice.addEventListener("click", async () =>
 
     const config = await arduinoInterface.getConfig();
 
-    devicePanel.deviceModel = config.name;
+    devicePanel.deviceModel = config.model;
     devicePanel.pins = config.pins.map((pin) => (
     {
         id: pin.id,
@@ -39,11 +39,6 @@ _newDevice.addEventListener("click", async () =>
     {
         switch (true)
         {
-            case e instanceof ArduinoInterfacePanelDisconnectEvent:
-            {
-                arduinoInterface.release();
-                break;
-            }
             case e instanceof ArduinoInterfacePanelPinChangeEvent:
             {
                 await arduinoInterface.setPin(e.pinId, e.isHigh);
@@ -59,12 +54,26 @@ _newDevice.addEventListener("click", async () =>
         }
     });
 
+    devicePanel.addEventListener("disconnect", async (e) =>
+    {
+        switch (true)
+        {
+            case e instanceof ArduinoInterfacePanelDisconnectEvent:
+            {
+                arduinoInterface.release();
+                await arduinoInterface.port.close();
+                devicePanel.remove();
+                break;
+            }
+        }
+    })
+
     arduinoInterface.addEventListener("release", (e) =>
     {
         devicePanel.remove();
     });
 
-    arduinoInterface.addEventListener("pinChange", (e) =>
+    arduinoInterface.addEventListener("pin-change", (e) =>
     {
         devicePanel.setPin(e.pinId, e.pinIsHigh);
     });

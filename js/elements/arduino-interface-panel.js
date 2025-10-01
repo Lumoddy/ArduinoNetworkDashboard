@@ -12,7 +12,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     <div class="header">
         <div class="title">
             <h1>Device</h1>
-            <h2>(Missing)</h2>
+            <h2>(Connecting)</h2>
         </div>
         <div class="buttons">
             <button class="disconnect">
@@ -443,7 +443,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
             nameElement.textContent = replacerPin.name;
 
             const controlElement = pinElement.appendChild(document.createElement(controlElementType));
-            controlElement.setAttribute("pin-mode", replacerPin.name);
+            controlElement.setAttribute("pin-mode", replacerPin.mode);
             if (replacerPin.isHigh)
                 controlElement.setAttribute("is-high", "");
         }
@@ -463,7 +463,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     @public*/ getPin(pin)
     {
         const pinElement = this.querySelector(
-            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}${pin}]`);
+            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}"${pin}"]`);
 
         if (!(pinElement instanceof HTMLElement))
             throw new Error(
@@ -502,7 +502,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     @public*/ setPin(pin, isHigh)
     {
         const pinElement = this.querySelector(
-            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}${pin}]`);
+            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}"${pin}"]`);
 
         if (!(pinElement instanceof HTMLElement))
             throw new Error(
@@ -535,7 +535,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     @public*/ getPinMode(pin)
     {
         const pinElement = this.querySelector(
-            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}${pin}]`);
+            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}"${pin}"]`);
 
         if (!(pinElement instanceof HTMLElement))
             throw new Error(
@@ -577,7 +577,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     @public*/ setPinMode(pin, mode)
     {
         const pinElement = this.querySelector(
-            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}${pin}]`);
+            `& > .pin-container > .pin[${typeof pin === "number" ? "pin-id=" : "pin-name="}"${pin}"]`);
 
         if (!(pinElement instanceof HTMLElement))
             throw new Error(
