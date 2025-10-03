@@ -198,15 +198,37 @@ fn process() -> !
         try_write_change(InteractivePinID::A4);
         try_write_change(InteractivePinID::A5);
 
-        match block!(raw_serial_reader.read()).unwrap_infallible()
+        match raw_serial_reader.read()
         {
-            CONTROL_BYTE =>
+            Ok(CONTROL_BYTE) =>
             {
-                match block!(raw_serial_reader.read()).unwrap_infallible()
+                match
                 {
-                    START_TEXT_BYTE => (),
-                    CONTROL_BYTE => continue,
-                    byte =>
+                    const MAX_ATTEMPTS: u32 = DefaultClock::FREQ / 1000;
+
+                    let mut attempt_limit = MAX_ATTEMPTS;
+
+                    loop
+                    {
+                        match raw_serial_reader.read()
+                        {
+                            Ok(byte) => break Ok(byte),
+                            Err(nb::Error::WouldBlock) =>
+                            {
+                                if attempt_limit == 0
+                                {
+                                    break Err(_ReadError::TimedOut);
+                                }
+
+                                attempt_limit -= 1;
+                            },
+                        }
+                    }
+                }
+                {
+                    Ok(START_TEXT_BYTE) => (),
+                    Ok(CONTROL_BYTE) => continue,
+                    Ok(byte) =>
                     {
                         infallible_scope(||
                         {
@@ -224,9 +246,46 @@ fn process() -> !
 
                         continue;
                     },
+                    Err(_ReadError::FoundControlByte(byte)) =>
+                    {
+                        infallible_scope(||
+                        {
+                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                            match write_smf(
+                                &mut write_byte,
+                                ResponseMessage::InvalidControlByteError { byte_index: 0, byte })
+                            {
+                                Ok(()) => (),
+                            }
+
+                            Ok(())
+                        });
+
+                        continue;
+                    },
+                    Err(_ReadError::TimedOut) =>
+                    {
+                        infallible_scope(||
+                        {
+                            block!(raw_serial_writer.write(CONTROL_BYTE))?;
+                            block!(raw_serial_writer.write(START_TEXT_BYTE))?;
+                            match write_smf(
+                                &mut write_byte,
+                                ResponseMessage::TimedOutError { byte_index: 0 })
+                            {
+                                Ok(()) => (),
+                            }
+
+                            Ok(())
+                        });
+
+                        continue;
+                    },
                 }
             }
-            _ => continue,
+            Ok(_) => continue,
+            Err(_) => continue,
         }
 
         let response = match read_smf(&mut read_byte)
