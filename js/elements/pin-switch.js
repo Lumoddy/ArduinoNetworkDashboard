@@ -209,6 +209,19 @@ import { html } from "../common.js";
 */
 
 /**
+@param {string | undefined?} value
+@returns {PinMode}
+*/ export function ensureIsPinMode(value)
+{
+    switch (value)
+    {
+        case "input": return "input";
+        case "output": return "output";
+        default: return "ignore";
+    }
+}
+
+/**
 */ export class PinSwitchChangeEvent extends Event
 {
     /**
@@ -226,11 +239,11 @@ import { html } from "../common.js";
 
         /**
         @type {boolean}
-        @private*/ this._wasHigh = init.wasHigh;
+        @private*/ this._wasHigh = Boolean(init.wasHigh);
 
         /**
         @type {boolean}
-        @private*/ this._isHigh = init.isHigh;
+        @private*/ this._isHigh = Boolean(init.isHigh);
     }
 
     /**
@@ -286,15 +299,7 @@ import { html } from "../common.js";
     @returns {PinMode}
     @public*/ get mode()
     {
-        switch (this.getAttribute("pin-mode"))
-        {
-            case "input":
-                return "input";
-            case "output":
-                return "output";
-            default:
-                return "ignore";
-        }
+        return ensureIsPinMode(this.getAttribute("pin-mode"));
     }
     /**
     @public*/ set mode(value)

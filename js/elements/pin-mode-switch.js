@@ -1,4 +1,5 @@
 import { html } from "../common.js";
+import { ensureIsPinMode } from "../elements/pin-switch.js";
 /**
 @import { PinMode } from "./pin-switch.js"
 */
@@ -121,11 +122,11 @@ import { html } from "../common.js";
 
         /**
         @type {PinMode}
-        @private*/ this._oldMode = init.oldMode;
+        @private*/ this._oldMode = ensureIsPinMode(init.oldMode);
 
         /**
         @type {PinMode}
-        @private*/ this._newMode = init.newMode;
+        @private*/ this._newMode = ensureIsPinMode(init.newMode);
     }
 
     /**
@@ -185,12 +186,8 @@ import { html } from "../common.js";
     {
         const input = this._shadowRoot.querySelector(
             ":host > label > input:checked");
-        switch (input instanceof HTMLInputElement ? input.value : undefined)
-        {
-            case "input": return "input";
-            case "output": return "output";
-            default: return "ignore";
-        }
+        return ensureIsPinMode(
+            input instanceof HTMLInputElement ? input.value : undefined);
     }
     /**
     @public*/ set mode(value)
@@ -210,23 +207,11 @@ import { html } from "../common.js";
             {
                 /**
                 @type {PinMode}
-                */ let oldMode;
-                switch (oldValue)
-                {
-                    case "input": oldMode = "input"; break;
-                    case "output": oldMode = "output"; break;
-                    default: oldMode = "ignore"; break;
-                }
+                */ let oldMode = ensureIsPinMode(oldValue);
 
                 /**
                 @type {PinMode}
-                */ let newMode;
-                switch (newValue)
-                {
-                    case "input": newMode = "input"; break;
-                    case "output": newMode = "output"; break;
-                    default: newMode = "ignore"; break;
-                }
+                */ let newMode = ensureIsPinMode(newValue);
 
                 const otherInputs = this._shadowRoot.querySelectorAll(
                     `:host > label > input:not([value="${newMode}"])`);

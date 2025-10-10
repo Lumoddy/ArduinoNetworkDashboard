@@ -2,17 +2,16 @@ import { serializerVia } from "../smf/serialization.js";
 import { arduinoPinIdSerializer } from "./pin-id.js";
 import { arduinoPinModeSerializer } from "./pin-mode.js";
 /**
-@import { ArduinoPinId } from "./pin-id.js"
 @import { ArduinoPinMode } from "./pin-mode.js"
 */
 
 /**
 @export @typedef {
     | { readonly type: "get-config" }
-    | { readonly type: "get-pin", readonly pin: ArduinoPinId }
-    | { readonly type: "set-pin", readonly pin: ArduinoPinId, readonly isHigh: boolean }
-    | { readonly type: "get-pin-mode", readonly pin: ArduinoPinId }
-    | { readonly type: "set-pin-mode", readonly pin: ArduinoPinId, readonly mode: ArduinoPinMode }
+    | { readonly type: "get-pin", readonly pin: number }
+    | { readonly type: "set-pin", readonly pin: number, readonly isHigh: boolean }
+    | { readonly type: "get-pin-mode", readonly pin: number }
+    | { readonly type: "set-pin-mode", readonly pin: number, readonly mode: ArduinoPinMode }
 } ArduinoRequest
 */
 

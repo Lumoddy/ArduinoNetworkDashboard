@@ -1,7 +1,7 @@
 import { ArduinoInterface } from "../arduino/interface.js";
 import { html } from "../common.js";
 import { PinModeSwitch, PinModeSwitchChangeEvent } from "./pin-mode-switch.js";
-import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
+import { ensureIsPinMode, PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
 /**
 @import { ArduinoConfig } from "../arduino/interface.js"
 @import { PinMode } from "./pin-switch.js"
@@ -47,19 +47,19 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
 
         /**
         @type {boolean}
-        @private*/ this._wasHigh = init.wasHigh;
+        @private*/ this._wasHigh = Boolean(init.wasHigh);
 
         /**
         @type {boolean}
-        @private*/ this._isHigh = init.isHigh;
+        @private*/ this._isHigh = Boolean(init.isHigh);
 
         /**
         @type {number}
-        @private*/ this._pinId = init.pinId;
+        @private*/ this._pinId = Number(init.pinId);
 
         /**
         @type {string}
-        @private*/ this._pinName = init.pinName;
+        @private*/ this._pinName = String(init.pinName);
     }
 
     /**
@@ -68,7 +68,8 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     {
         if (!(super.target instanceof ArduinoInterfacePanel))
             throw new TypeError(
-                "ArduinoInterfacePanelPinChangeEvent can only be used on ArduinoInterfacePanel.");
+                "ArduinoInterfacePanelPinChangeEvent can only be used on " +
+                "ArduinoInterfacePanel.");
 
         return super.target;
     }
@@ -110,19 +111,19 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
 
         /**
         @type {PinMode}
-        @private*/ this._oldMode = init.oldMode;
+        @private*/ this._oldMode = ensureIsPinMode(init.oldMode);
 
         /**
         @type {PinMode}
-        @private*/ this._newMode = init.newMode;
+        @private*/ this._newMode = ensureIsPinMode(init.newMode);
 
         /**
         @type {number}
-        @private*/ this._pinId = init.pinId;
+        @private*/ this._pinId = Number(init.pinId);
 
         /**
         @type {string}
-        @private*/ this._pinName = init.pinName;
+        @private*/ this._pinName = String(init.pinName);
     }
 
     /**
@@ -131,7 +132,8 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     {
         if (!(super.target instanceof ArduinoInterfacePanel))
             throw new TypeError(
-                "ArduinoInterfacePanelPinChangeEvent can only be used on ArduinoInterfacePanel.");
+                "ArduinoInterfacePanelPinChangeEvent can only be used on " +
+                "ArduinoInterfacePanel.");
 
         return super.target;
     }
@@ -170,7 +172,8 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
     {
         if (!(super.target instanceof ArduinoInterfacePanel))
             throw new TypeError(
-                "ArduinoInterfacePanelDisconnectEvent can only be used on ArduinoInterfacePanel.");
+                "ArduinoInterfacePanelDisconnectEvent can only be used on " +
+                "ArduinoInterfacePanel.");
 
         return super.target;
     }
@@ -354,7 +357,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
         readonly {
             readonly id: number,
             readonly name: string,
-            readonly mode: "input" | "output" | "ignore",
+            readonly mode: PinMode,
             readonly isHigh: boolean,
         }[]
     }
@@ -377,19 +380,7 @@ import { PinSwitch, PinSwitchChangeEvent } from "./pin-switch.js";
 
                 /**
                 @type {PinMode}
-                */ let mode;
-                switch (controlElement?.getAttribute("pin-mode"))
-                {
-                    case "input":
-                        mode = "input";
-                        break;
-                    case "output":
-                        mode = "output";
-                        break;
-                    default:
-                        mode = "ignore";
-                        break;
-                }
+                */ let mode = ensureIsPinMode(controlElement?.getAttribute("pin-mode"));
 
                 let isHigh;
                 switch (controlElement?.getAttribute("is-high"))

@@ -2,7 +2,6 @@ import { deserializeVia } from "../smf/serialization.js";
 import { arduinoPinIdDeserializer } from "./pin-id.js";
 import { arduinoPinModeDeserializer } from "./pin-mode.js";
 /**
-@import { ArduinoPinId } from "./pin-id.js"
 @import { ArduinoPinMode } from "./pin-mode.js"
 @import { ArduinoConfig } from "./interface.js"
 */
@@ -10,15 +9,15 @@ import { arduinoPinModeDeserializer } from "./pin-mode.js";
 /**
 @export @typedef {
     | { type: "+get-config", config: ArduinoConfig }
-    | { type: "+get-pin-ok", pin: ArduinoPinId, isHigh: boolean }
-    | { type: "+get-pin-error", pin: ArduinoPinId, message: string }
-    | { type: "+set-pin-ok", pin: ArduinoPinId }
-    | { type: "+set-pin-error", pin: ArduinoPinId, message: string }
-    | { type: "+get-pin-mode-ok", pin: ArduinoPinId, mode: ArduinoPinMode }
-    | { type: "+get-pin-mode-error", pin: ArduinoPinId, message: string }
-    | { type: "+set-pin-mode-ok", pin: ArduinoPinId }
-    | { type: "+set-pin-mode-error", pin: ArduinoPinId, message: string }
-    | { type: "pin-changed", pin: ArduinoPinId, isHigh: boolean }
+    | { type: "+get-pin-ok", pin: number, isHigh: boolean }
+    | { type: "+get-pin-error", pin: number, message: string }
+    | { type: "+set-pin-ok", pin: number }
+    | { type: "+set-pin-error", pin: number, message: string }
+    | { type: "+get-pin-mode-ok", pin: number, mode: ArduinoPinMode }
+    | { type: "+get-pin-mode-error", pin: number, message: string }
+    | { type: "+set-pin-mode-ok", pin: number }
+    | { type: "+set-pin-mode-error", pin: number, message: string }
+    | { type: "pin-changed", pin: number, isHigh: boolean }
     | { type: "error", error: "invalid-control-byte", byteIndex: number, byte: number }
     | { type: "error", error: "collect-overflow", byteIndex: number, capacity: number }
     | { type: "error", error: "invalid-syntax", byteIndex: number, found: number, expected: string }

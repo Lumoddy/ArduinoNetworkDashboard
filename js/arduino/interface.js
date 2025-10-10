@@ -2,7 +2,6 @@ import { deserializeVia, serializerVia } from "../smf/serialization.js";
 import { arduinoRequestSerializer } from "./request.js";
 import { arduinoResponseDeserializer } from "./response.js";
 /**
-@import { ArduinoPinId } from "./pin-id.js"
 @import { ArduinoPinMode } from "./pin-mode.js"
 @import { ArduinoRequest } from "./request.js"
 @import { ArduinoResponse } from "./response.js"
@@ -551,7 +550,7 @@ import { arduinoResponseDeserializer } from "./response.js";
 
                         for (const listener of this._eventListeners["pin-change"])
                             setTimeout(listener, undefined, event);
-                    })
+                    });
 
                     break;
                 }
@@ -847,6 +846,26 @@ import { arduinoResponseDeserializer } from "./response.js";
                 `Pin with name ${pinName} does not exist.`);
 
         return pinId;
+    }
+
+    /**
+    @param {number} pinId
+    @returns {Promise<string>}
+    @public*/ async pinIdToName(pinId)
+    {
+        const config = await this.getConfig();
+
+        let pinName;
+
+        for (const pinConfig of config.pins)
+            if (pinConfig.id === pinId)
+                pinName = pinConfig.name;
+
+        if (pinName === undefined)
+            throw new Error(
+                `Pin with id ${pinId} does not exist.`);
+
+        return pinName;
     }
 
     /**
