@@ -320,8 +320,8 @@ import { html } from "../common.js";
 
     /**
     @param {typeof PinSwitch["observedAttributes"][number]} attributeName
-    @param {string | null} oldValue
-    @param {string | null} newValue
+    @param {string?} oldValue
+    @param {string?} newValue
     @protected*/ attributeChangedCallback(attributeName, oldValue, newValue)
     {
         switch (attributeName)

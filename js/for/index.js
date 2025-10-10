@@ -1,80 +1,82 @@
-import { ArduinoInterface } from "../arduino/interface.js";
-import { ArduinoInterfacePanel, ArduinoInterfacePanelDisconnectEvent, ArduinoInterfacePanelPinChangeEvent, ArduinoInterfacePanelPinModeChangeEvent } from "../elements/arduino-interface-panel.js";
+import "./index/device-list.js"
 
-const _deviceListElement = /** @type {HTMLElement} */(
-    document.getElementById("device-list"));
+if (navigator.serial === undefined)
+    alert("This app is not supported on this browser.");
 
-const _newDevice = /** @type {HTMLButtonElement} */(
-    document.getElementById("new-device"));
+// const _deviceListElement = /** @type {HTMLElement} */(
+//     document.getElementById("device-list"));
 
-_newDevice.addEventListener("click", async () =>
-{
-    const port = await navigator.serial.requestPort();
+// const _newDevice = /** @type {HTMLButtonElement} */(
+//     document.getElementById("new-device"));
 
-    if (port.readable === null)
-        await port.open({ baudRate: 9600 });
+// _newDevice.addEventListener("click", async () =>
+// {
+//     const port = await navigator.serial.requestPort();
 
-    const arduinoInterface = new ArduinoInterface(port);
+//     if (port.readable === null)
+//         await port.open({ baudRate: 9600 });
 
-    const devicePanel = /** @type {ArduinoInterfacePanel} */(
-        _deviceListElement.appendChild(document.createElement("arduino-interface-panel")));
+//     const arduinoInterface = new ArduinoInterface(port);
 
-    // @ts-ignore: allow use in debug console.
-    devicePanel.arduinoInterface = arduinoInterface
+//     const devicePanel = /** @type {ArduinoInterfacePanel} */(
+//         _deviceListElement.appendChild(document.createElement("arduino-interface-panel")));
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+//     // @ts-ignore: allow use in debug console.
+//     devicePanel.arduinoInterface = arduinoInterface
 
-    const config = await arduinoInterface.getConfig();
+//     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    devicePanel.deviceModel = config.model;
-    devicePanel.pins = config.pins.map((pin) => (
-    {
-        id: pin.id,
-        name: pin.name,
-        mode: "ignore",
-        isHigh: false,
-    }));
+//     const config = await arduinoInterface.getConfig();
 
-    devicePanel.addEventListener("change", async (e) =>
-    {
-        switch (true)
-        {
-            case e instanceof ArduinoInterfacePanelPinChangeEvent:
-            {
-                await arduinoInterface.setPin(e.pinId, e.isHigh);
-                break;
-            }
-            case e instanceof ArduinoInterfacePanelPinModeChangeEvent:
-            {
-                await arduinoInterface.setPinMode(
-                    e.pinId,
-                    e.newMode === "output" ? "digital-output" : "digital-input");
-                break;
-            }
-        }
-    });
+//     devicePanel.deviceModel = config.model;
+//     devicePanel.pins = config.pins.map((pin) => (
+//     {
+//         id: pin.id,
+//         name: pin.name,
+//         mode: "ignore",
+//         isHigh: false,
+//     }));
 
-    devicePanel.addEventListener("disconnect", async (e) =>
-    {
-        switch (true)
-        {
-            case e instanceof ArduinoInterfacePanelDisconnectEvent:
-            {
-                arduinoInterface.release();
-                await arduinoInterface.port.close();
-                devicePanel.remove();
-                break;
-            }
-        }
-    })
+//     devicePanel.addEventListener("change", async (e) =>
+//     {
+//         switch (true)
+//         {
+//             case e instanceof ArduinoInterfacePanelPinChangeEvent:
+//             {
+//                 await arduinoInterface.setPin(e.pinId, e.isHigh);
+//                 break;
+//             }
+//             case e instanceof ArduinoInterfacePanelPinModeChangeEvent:
+//             {
+//                 await arduinoInterface.setPinMode(
+//                     e.pinId,
+//                     e.newMode === "output" ? "digital-output" : "digital-input");
+//                 break;
+//             }
+//         }
+//     });
 
-    arduinoInterface.addEventListener("release", (e) =>
-    {
-        devicePanel.remove();
-    });
+//     devicePanel.addEventListener("disconnect", async (e) =>
+//     {
+//         switch (true)
+//         {
+//             case e instanceof ArduinoInterfacePanelDisconnectEvent:
+//             {
+//                 arduinoInterface.release();
+//                 await arduinoInterface.port.close();
+//                 devicePanel.remove();
+//                 break;
+//             }
+//         }
+//     })
 
-    arduinoInterface.addEventListener("pin-change", (e) =>
-    {
-        devicePanel.setPin(e.pinId, e.pinIsHigh);
-    });
-});
+//     arduinoInterface.addEventListener("release", (e) =>
+//     {
+//         devicePanel.remove();
+//     });
+
+//     arduinoInterface.addEventListener("pin-change", (e) =>
+//     {
+//         devicePanel.setPin(e.pinId, e.pinIsHigh);
+//     });
+// });

@@ -10,7 +10,40 @@
     <script type="module" src="./js/for/index.js"></script>
 </head>
 <body>
-    <div id="device-list"></div>
-    <button id="new-device">New Device</button>
+    <div id="device-section">
+        <header>
+            <span>Devices</span>
+            <hr>
+            <label>
+                <span>Edit</span>
+                <input id="device-edit" type="checkbox">
+            </label>
+        </header>
+        <div id="device-list">
+            <button id="new-device">New Device</button>
+        </div>
+    </div>
+    <div id="automation-section">
+        <header>
+            <span>Automation</span>
+        </header>
+        <div id="automation-list">
+            <button id="new-automation">New Automation</button>
+        </div>
+    </div>
+    <div id="replay-section">
+        <header>
+            <span>Replay</span>
+        </header>
+        <div id="replay-log" contenteditable="plaintext-only"></div>
+        <div id="replay-controls">
+            <button id="replay-clear">Clear</button>
+            <label>
+                <span>Record</span>
+                <input id="replay-recording" type="checkbox">
+            </label>
+            <button id="replay-save">Save</button>
+        </div>
+    </div>
 </body>
 </html>
