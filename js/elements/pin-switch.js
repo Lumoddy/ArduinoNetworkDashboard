@@ -261,6 +261,7 @@ import { html } from "../common.js";
     [
         "pin-mode",
         "is-high",
+        "disable",
     ]);
 
     /**
@@ -319,6 +320,28 @@ import { html } from "../common.js";
     }
 
     /**
+    @returns {boolean}
+    @public*/ get disabled()
+    {
+        switch (this.getAttribute("disable"))
+        {
+            case "true":
+            case "":
+                return true;
+            default:
+                return false;
+        }
+    }
+    /**
+    @public*/ set disabled(value)
+    {
+        if (value)
+            this.setAttribute("disable", "");
+        else
+            this.removeAttribute("disable");
+    }
+
+    /**
     @param {typeof PinSwitch["observedAttributes"][number]} attributeName
     @param {string?} oldValue
     @param {string?} newValue
@@ -358,6 +381,17 @@ import { html } from "../common.js";
                             composed: false,
                         }));
                 }
+
+                break;
+            }
+            case "disable":
+            {
+                const disabled = newValue === "" || newValue === "true";
+
+                for (const element of this._shadowRoot.querySelectorAll(
+                    `:host input`))
+                    if (element instanceof HTMLInputElement)
+                        element.disabled = disabled;
 
                 break;
             }

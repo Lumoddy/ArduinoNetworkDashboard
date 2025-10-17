@@ -155,6 +155,7 @@ import { html } from "../common.js";
     @protected @readonly*/ static observedAttributes = /** @type {const} */(
     [
         "pin-mode",
+        "disable",
     ]);
 
     /**
@@ -196,6 +197,28 @@ import { html } from "../common.js";
     @public*/ set mode(value)
     {
         this.setAttribute("pin-mode", value);
+    }
+
+    /**
+    @returns {boolean}
+    @public*/ get disabled()
+    {
+        switch (this.getAttribute("disable"))
+        {
+            case "true":
+            case "":
+                return true;
+            default:
+                return false;
+        }
+    }
+    /**
+    @public*/ set disabled(value)
+    {
+        if (value)
+            this.setAttribute("disable", "");
+        else
+            this.removeAttribute("disable");
     }
 
     /**
@@ -251,6 +274,17 @@ import { html } from "../common.js";
                         cancelable: false,
                         composed: false,
                     }));
+
+                break;
+            }
+            case "disable":
+            {
+                const disabled = newValue === "" || newValue === "true";
+
+                for (const element of this._shadowRoot.querySelectorAll(
+                    `:host input`))
+                    if (element instanceof HTMLInputElement)
+                        element.disabled = disabled;
 
                 break;
             }

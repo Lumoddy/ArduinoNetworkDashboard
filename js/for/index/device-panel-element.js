@@ -165,10 +165,10 @@ DevicePinEventMap
                 <div>
                     <span
                         class="device-name"
-                        style="display: none">Device</span>
+                        style="display: none">New Device</span>
                     <span
                         class="device-name editing"
-                        contenteditable="plaintext-only">Device</span>
+                        contenteditable="plaintext-only">New Device</span>
                     <span
                         class="device-model">(Uninitialized)</span>
                 </div>
@@ -227,7 +227,8 @@ DevicePinEventMap
 
         this._arduinoInterface.addEventListener("pin-change", (e) =>
         {
-            for (const element of DevicePanelElement.prototype.queryPinElements())
+            for (const element of DevicePanelElement.prototype.queryPinElements
+                .call(this))
                 if (element.queryPinId() === e.pinId)
                     element.setPin(e.pinIsHigh);
         });
@@ -457,10 +458,11 @@ DevicePinEventMap
     @returns {HTMLDivElement}
     @public*/ forceQueryPinContainer()
     {
-        const element = DevicePanelElement.prototype.queryPinContainer.call(this);
+        const element = DevicePanelElement.prototype.queryPinContainer
+            .call(this);
         if (element === null)
             throw new TypeError(
-                `Missing device name element.`);
+                `Missing pin container element.`);
         return element;
     }
 
@@ -490,10 +492,11 @@ DevicePinEventMap
     @returns {HTMLInputElement}
     @public*/ forceQueryEditToggle()
     {
-        const element = DevicePanelElement.prototype.queryEditToggle.call(this);
+        const element = DevicePanelElement.prototype.queryEditToggle
+            .call(this);
         if (element === null)
             throw new TypeError(
-                `Missing device name element.`);
+                `Missing edit toggle.`);
         return element;
     }
 
@@ -523,10 +526,11 @@ DevicePinEventMap
     @returns {HTMLInputElement}
     @public*/ forceQueryDisconnectButton()
     {
-        const element = DevicePanelElement.prototype.queryDisconnectButton.call(this);
+        const element = DevicePanelElement.prototype.queryDisconnectButton
+            .call(this);
         if (element === null)
             throw new TypeError(
-                `Missing device name element.`);
+                `Missing disconnect button.`);
         return element;
     }
 
