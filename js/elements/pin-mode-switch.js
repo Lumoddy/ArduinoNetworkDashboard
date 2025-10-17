@@ -171,7 +171,7 @@ import { html } from "../common.js";
         {
             if (e.target instanceof HTMLInputElement)
             {
-                // @ts-ignore: checked internally.
+                // @ts-expect-error: checked internally.
                 this.mode = e.target.value;
             }
 

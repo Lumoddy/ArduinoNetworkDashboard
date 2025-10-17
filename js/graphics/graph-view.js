@@ -239,7 +239,7 @@ import { GraphElement } from "./graph-element.js";
 
         if (event.button === 0 || event.pointerType === "touch")
         {
-            for (let element = /** @type {Node | null} */(event.target);
+            for (let element = /** @type {Node?} */(event.target);
                 element != null && element != this;
                 element = element.parentNode)
             {
@@ -374,8 +374,8 @@ import { GraphElement } from "./graph-element.js";
 
     /**
     @param {typeof GraphView["observedAttributes"][number]} attributeName
-    @param {string | null} oldValue
-    @param {string | null} newValue
+    @param {string?} oldValue
+    @param {string?} newValue
     @protected*/ attributeChangedCallback(attributeName, oldValue, newValue)
     {
         switch (attributeName)
@@ -440,16 +440,18 @@ import { GraphElement } from "./graph-element.js";
     @returns {GraphElement}
     @public*/ appendGraphElement(node)
     {
-        // @ts-ignore
-        if (node._graph !== this && node._graph !== null) // @ts-ignore
+        // @ts-expect-error
+        if (node._graph !== this && node._graph !== null)
+            // @ts-expect-error
             node._graph.removeGraphElement(node);
 
         const index = this._nodes.indexOf(node);
         if (index !== -1)
             return node;
 
-        this._nodes.push(node); // @ts-ignore
-        node._graph = this; // @ts-ignore
+        this._nodes.push(node);
+        // @ts-expect-error
+        node._graph = this;
         this._graphicElementContainer.appendChild(node.element);
 
         this._nodeMutationObserver.observe(node.element, { attributeFilter: ["view-draggable"] });
@@ -465,7 +467,8 @@ import { GraphElement } from "./graph-element.js";
         if (index === -1)
             return;
 
-        this._nodes.splice(index, 1); // @ts-ignore
+        this._nodes.splice(index, 1);
+        // @ts-expect-error
         node._graph = null;
         this._graphicElementContainer.removeChild(node.element);
 

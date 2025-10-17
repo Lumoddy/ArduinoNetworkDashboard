@@ -175,7 +175,7 @@
                             // Generator spec.
                             return { done: false, value: undefined };
                         case -1:
-                            // @ts-ignore: Generator spec.
+                            // @ts-expect-error: Generator spec.
                             return { done: true, value: undefined };
                         default:
                             if (typeof value !== "number")
@@ -183,7 +183,7 @@
                                     "Only bytes can be given to deserializer.");
                             dataView.setUint8(this._state - 1, value);
                             this._state = this._state > size ? -1 : this._state + 1;
-                            // @ts-ignore: Contract.
+                            // @ts-expect-error: Contract.
                             return { done: true, value: dataView[finalize](0, true) };
                     }
                 },
@@ -215,7 +215,7 @@
                         // Generator spec.
                         return { done: false, value: undefined };
                     case -1:
-                        // @ts-ignore: Generator spec.
+                        // @ts-expect-error: Generator spec.
                         return { done: true, value: undefined };
                     case 1:
                         if (typeof value !== "number")
@@ -244,7 +244,7 @@
                         // Generator spec.
                         return { done: false, value: undefined };
                     case -1:
-                        // @ts-ignore: Generator spec.
+                        // @ts-expect-error: Generator spec.
                         return { done: true, value: undefined };
                     case 1:
                         if (typeof value !== "number")

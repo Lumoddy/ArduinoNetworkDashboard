@@ -1036,5 +1036,5 @@ import { arduinoResponseDeserializer } from "./response.js";
         }
     }
 }
-// @ts-ignore: Allow use in debug console.
+// @ts-expect-error: Allow use in debug console.
 window.ArduinoInterface = ArduinoInterface;

@@ -1,212 +1,221 @@
-import { ArduinoInterface } from "../../arduino/interface.js";
-import { callLater } from "../../common.js";
-import { DevicePanel } from "./device-panel.js";
-
+import { DevicePanelElement } from "./device-panel-element.js";
 /**
-@export @typedef {
-{
-    "device-added": readonly [
-        event:
-        {
-            readonly target: DeviceManager,
-            readonly panel: DevicePanel,
-        }],
-    "device-removed": readonly [
-        event:
-        {
-            readonly target: DeviceManager,
-            readonly panel: DevicePanel,
-        }],
-    "device-disconnected": readonly [
-        event:
-        {
-            readonly target: DeviceManager,
-            readonly panel: DevicePanel,
-        }],
-}
-} DeviceManagerEventMap
+@import { DevicePanelEventMap } from "./device-panel-element.js"
 */
 
-// MARK: DeviceManager
+// Console access.
+export * from "./device-panel-element.js";
+
 /**
-*/ export class DeviceManager
+@returns {HTMLDivElement?}
+*/ export function queryDeviceListElement()
+{
+    return document.querySelector(`div#device-list`);
+}
+
+/**
+@returns {HTMLDivElement}
+*/ export function forceQueryDeviceListElement()
+{
+    const element = queryDeviceListElement();
+    if (element === null)
+        throw new TypeError(
+            `Missing device list element.`);
+    return element;
+}
+
+/**
+@param {EventTarget?} element
+@returns {element is HTMLDivElement}
+*/ export function isDeviceListElement(element)
+{
+    return element instanceof Element
+        && element.matches("div#device-list");
+}
+
+/**
+@returns {HTMLButtonElement?}
+*/ export function queryNewDeviceButton()
+{
+    return document.querySelector(`ul#device-list`);
+}
+
+/**
+@returns {HTMLButtonElement}
+*/ export function forceQueryNewDeviceButton()
+{
+    const element = queryNewDeviceButton();
+    if (element === null)
+        throw new TypeError(
+            `Missing device list element.`);
+    return element;
+}
+
+/**
+@param {EventTarget?} element
+@returns {element is HTMLButtonElement}
+*/ export function isNewDeviceButton(element)
+{
+    return element instanceof Element
+        && element.matches("button#new-device");
+}
+
+/**
+*/ export class DeviceAddedEvent extends Event
 {
     /**
     @param {
     {
-        
+        device: DevicePanelElement,
     }
-    } options
-    @public*/ constructor(options)
+    } detail
+    @public*/ constructor(detail)
     {
+        super("device-added");
+
         /**
-        @type {
-        {
-            [K in keyof DeviceManagerEventMap]?:
-                ((this: unknown, ...args: DeviceManagerEventMap[K]) => void)[]
-        }
-        }
-        @private*/ this._listeners = {};
+        @type {DevicePanelElement}
+        @private*/ this._device = detail.device;
 
-        this.queryNewDeviceButton().addEventListener("click", async () =>
-        {
-            const port = await navigator.serial.requestPort();
-            await port.open({ baudRate: 9600 });
-
-            const panel = new DevicePanel(
-            {
-                devicePanelContainer: this.queryDevicePanelContainer(),
-                arduinoInterface: new ArduinoInterface(port),
-            });
-
-            panel.addEventListener("disconnect", (e) =>
-            {
-                for (const listener of this._listeners["device-disconnected"] ?? [])
-                    callLater(
-                        listener,
-                        undefined,
-                        {
-                            target: this,
-                            panel: e.target,
-                        });
-            });
-
-            for (const listener of this._listeners["device-added"] ?? [])
-                callLater(
-                    listener,
-                    undefined,
-                    {
-                        target: this,
-                        panel,
-                    });
-        });
+        if (!(this._device instanceof DevicePanelElement))
+            throw new TypeError();
     }
 
     /**
-    @returns {DevicePanel[]}
-    @public*/ queryDevices()
+    @returns {DevicePanelElement}
+    @public @override @readonly*/ get target()
     {
-        /**
-        @type {DevicePanel[]}
-        */ const devices = [];
-
-        for (const element of document.querySelectorAll(
-            "#device-list > li.device-panel"))
-        {
-            // @ts-ignore: Contract.
-            const handler = element.handler;
-
-            if (handler instanceof DevicePanel)
-                devices.push(handler);
-        }
-
-        return devices;
-    }
-
-    /**
-    @returns {HTMLButtonElement}
-    @public*/ queryDevicePanelContainer()
-    {
-        return DeviceManager.prototype._queryElement.call(
-            this,
-            "#device-list",
-            HTMLButtonElement);
-    }
-
-    /**
-    @param {unknown} element
-    @returns {element is HTMLButtonElement}
-    @public*/ isDevicePanelContainer(element)
-    {
-        return DeviceManager.prototype._matchesElement.call(
-            this,
-            element,
-            "#device-list",
-            HTMLButtonElement);
-    }
-
-    /**
-    @returns {HTMLButtonElement}
-    @public*/ queryNewDeviceButton()
-    {
-        return DeviceManager.prototype._queryElement.call(
-            this,
-            "#new-device",
-            HTMLButtonElement);
-    }
-
-    /**
-    @param {unknown} element
-    @returns {element is HTMLButtonElement}
-    @public*/ isNewDeviceButton(element)
-    {
-        return DeviceManager.prototype._matchesElement.call(
-            this,
-            element,
-            "#new-device",
-            HTMLButtonElement);
-    }
-
-    /**
-    @template {Element} E
-    @param {string} selector
-    @param {new (...args: any[]) => E} type
-    @returns {E}
-    @private*/ _queryElement(selector, type)
-    {
-        const element = document.querySelector(selector);
-
-        if (!(element instanceof type))
-            throw new TypeError(
-                `Missing '${type.name}' in device panel at '${selector}'.`);
-
-        return element;
-    }
-
-    /**
-    @template {Element} [E = Element]
-    @param {unknown} element
-    @param {string} selector
-    @param {new (...args: any[]) => E} [type]
-    @returns {element is E}
-    @private*/ _matchesElement(element, selector, type)
-    {
-        return element instanceof (type ?? Element)
-            && Element.prototype.matches.call(element, selector);
-    }
-
-    /**
-    @template {keyof DeviceManagerEventMap} const K
-    @param {K} type
-    @param {(this: unknown, ...args: DeviceManagerEventMap[K]) => void} listener
-    @public*/ addEventListener(type, listener)
-    {
-        switch (type)
-        {
-            case "device-added":
-            case "device-removed":
-                /**
-                @type {((...args: DeviceManagerEventMap[K]) => void)[]}
-                */ const listenerList = this._listeners[type] ??= [];
-                listenerList.push(listener);
-            default:
-                throw new TypeError(
-                    `'${type}' is not a valid event type.`);
-        }
-    }
-
-    /**
-    @template {keyof DeviceManagerEventMap} const K
-    @param {K} type
-    @param {(this: unknown, ...args: DeviceManagerEventMap[K]) => void} listener
-    @public*/ removeEventListener(type, listener)
-    {
-        const listenerList = this._listeners[type];
-        if (listenerList === undefined)
-            return;
-
-        const index = listenerList.indexOf(listener);
-        if (index !== -1)
-            listenerList.splice(index, 1);
+        const target = super.target;
+        if (target instanceof DevicePanelElement)
+            return target;
+        throw new TypeError();
     }
 }
+
+/**
+*/ export class DeviceRemovedEvent extends Event
+{
+    /**
+    @param {
+    {
+        device: DevicePanelElement,
+    }
+    } detail
+    @public*/ constructor(detail)
+    {
+        super("device-removed");
+
+        /**
+        @type {DevicePanelElement}
+        @private*/ this._device = detail.device;
+
+        if (!(this._device instanceof DevicePanelElement))
+            throw new TypeError();
+    }
+
+    /**
+    @returns {DevicePanelElement}
+    @public @override @readonly*/ get target()
+    {
+        const target = super.target;
+        if (target instanceof DevicePanelElement)
+            return target;
+        throw new TypeError();
+    }
+}
+
+/**
+@overload
+@param {"device-added"} type
+@param {(this: Document, e: DeviceAddedEvent) => void} listener
+@param {AddEventListenerOptions | boolean} [options]
+@returns {void}
+*//**
+@overload
+@param {"device-removed"} type
+@param {(this: Document, e: DeviceRemovedEvent) => void} listener
+@param {AddEventListenerOptions | boolean} [options]
+@returns {void}
+*//**
+@template {keyof DevicePanelEventMap} K
+@overload
+@param {K} type
+@param {(this: Document, e: DevicePanelEventMap[K]) => void} listener
+@param {AddEventListenerOptions | boolean} [options]
+@returns {void}
+*//**
+@overload
+@param {string} type
+@param {EventListenerOrEventListenerObject} listener
+@param {AddEventListenerOptions | boolean} [options]
+@returns {void}
+*//**
+@param {string} type
+@param {EventListenerOrEventListenerObject} listener
+@param {AddEventListenerOptions | boolean} [options]
+@returns {void}
+*/ export function addEventListener(type, listener, options)
+{
+    return document.addEventListener(type, listener, options);
+}
+
+/**
+@param {Event} event
+@returns {boolean}
+*/ export function dispatchEvent(event)
+{
+    return document.dispatchEvent(event);
+}
+
+/**
+@template {keyof DevicePanelEventMap} K
+@overload
+@param {string} type
+@param {(this: Document, e: DevicePanelEventMap[K]) => void} listener
+@param {EventListenerOptions | boolean} [options]
+@returns {void}
+*//**
+@overload
+@param {string} type
+@param {EventListenerOrEventListenerObject} listener
+@param {EventListenerOptions | boolean} [options]
+@returns {void}
+*//**
+@param {string} type
+@param {EventListenerOrEventListenerObject} listener
+@param {EventListenerOptions | boolean} [options]
+@returns {void}
+*/ export function removeEventListener(type, listener, options)
+{
+    return document.removeEventListener(type, listener, options);
+}
+
+document.addEventListener("click", (e) =>
+{
+    switch (true)
+    {
+        case isNewDeviceButton(e.target):
+        {
+            const device = forceQueryDeviceListElement().appendChild(
+                document.createElement("device-panel"));
+            if (!(device instanceof DevicePanelElement))
+                throw new TypeError();
+
+            dispatchEvent(new DeviceAddedEvent({ device }));
+
+            device.requestAndAssignPort()
+                .catch(() =>
+                {
+                    device.remove();
+                });
+
+            break;
+        }
+    }
+});
+
+addEventListener("device-disconnected", (e) =>
+{
+    e.target.remove();
+    dispatchEvent(new DeviceRemovedEvent({ device: e.target }));
+});
