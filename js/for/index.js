@@ -1,5 +1,6 @@
 import * as DeviceManager from "./index/device-manager.js";
 import * as AutomationManager from "./index/automation-manager.js";
+import * as RecordManager from "./index/record-manager.js";
 
 if (navigator.serial === undefined)
     alert("This app is not supported on this browser.");
@@ -8,3 +9,5 @@ if (navigator.serial === undefined)
 window.DeviceManager = DeviceManager;
 // @ts-expect-error: Console access.
 window.AutomationManager = AutomationManager;
+// @ts-expect-error: Console access.
+window.RecordManager = RecordManager;

@@ -261,7 +261,7 @@ import { html } from "../common.js";
     [
         "pin-mode",
         "is-high",
-        "disable",
+        "disabled",
     ]);
 
     /**
@@ -323,7 +323,7 @@ import { html } from "../common.js";
     @returns {boolean}
     @public*/ get disabled()
     {
-        switch (this.getAttribute("disable"))
+        switch (this.getAttribute("disabled"))
         {
             case "true":
             case "":
@@ -336,9 +336,9 @@ import { html } from "../common.js";
     @public*/ set disabled(value)
     {
         if (value)
-            this.setAttribute("disable", "");
+            this.setAttribute("disabled", "");
         else
-            this.removeAttribute("disable");
+            this.removeAttribute("disabled");
     }
 
     /**
@@ -369,22 +369,25 @@ import { html } from "../common.js";
                 if (input instanceof HTMLInputElement)
                     input.checked = isHigh;
 
-                if (this.getAttribute("pin-mode") === "output")
+                switch (this.getAttribute("pin-mode"))
                 {
-                    this.dispatchEvent(new PinSwitchChangeEvent(
-                        "change",
-                        {
-                            wasHigh,
-                            isHigh,
-                            bubbles: true,
-                            cancelable: false,
-                            composed: false,
-                        }));
+                    case "input":
+                    case "output":
+                        this.dispatchEvent(new PinSwitchChangeEvent(
+                            "change",
+                            {
+                                wasHigh,
+                                isHigh,
+                                bubbles: true,
+                                cancelable: false,
+                                composed: false,
+                            }));
+                        break;
                 }
 
                 break;
             }
-            case "disable":
+            case "disabled":
             {
                 const disabled = newValue === "" || newValue === "true";
 

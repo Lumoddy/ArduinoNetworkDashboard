@@ -1,3 +1,5 @@
+import * as DeviceManager from "./device-manager.js";
+import * as RecordManager from "./record-manager.js";
 import { AutomationPanelElement } from "./automation-panel-element.js";
 /**
 @import { AutomationPanelEventMap } from "./automation-panel-element.js"
@@ -58,6 +60,25 @@ export * from "./automation-panel-element.js";
 {
     return element instanceof Element
         && element.matches("button#new-automation");
+}
+
+/**
+@returns {NodeListOf<AutomationPanelElement>}
+*/ export function queryAutomationPanels()
+{
+    return document.querySelectorAll(
+        `div#automation-list > automation-panel`);
+}
+
+/**
+@param {EventTarget?} element
+@returns {element is AutomationPanelElement}
+*/ export function isAutomationPanel(element)
+{
+    return element instanceof AutomationPanelElement
+        && Element.prototype.matches.call(
+            element,
+            `div#automation-list > automation-panel`);
 }
 
 /**
@@ -190,7 +211,7 @@ export * from "./automation-panel-element.js";
     return document.removeEventListener(type, listener, options);
 }
 
-document.addEventListener("click", (e) =>
+addEventListener("click", (e) =>
 {
     switch (true)
     {
@@ -208,8 +229,266 @@ document.addEventListener("click", (e) =>
     }
 });
 
-addEventListener("automation-disconnected", (e) =>
+addEventListener("automation-removed", (e) =>
 {
     e.target.remove();
-    dispatchEvent(new AutomationRemovedEvent({ automation: e.target }));
 });
+
+/**
+@type {Map<
+    AutomationPanelElement,
+    {
+        pinChangeListens:
+        {
+            deviceName: string,
+            pinName: string,
+            forHigh: boolean,
+        }[],
+        pinHoldListens:
+        {
+            deviceName: string,
+            pinName: string,
+            forHigh: boolean,
+            holdTime: number,
+            holdHandle: ReturnType<typeof setInterval>?,
+        }[],
+        intervalHandles: (ReturnType<typeof setInterval>)[],
+    }>}
+*/ const automationListens = new Map();
+
+/**
+@type {{ [K in string]?: string }}
+*/ const variables = {};
+
+addEventListener("automation-active-change", (e) =>
+{
+    if (e.isActive)
+    {
+        /**
+        @type {typeof automationListens extends WeakMap<any, infer T> ? T : never}
+        */ const listens =
+        {
+            pinChangeListens: [],
+            pinHoldListens: [],
+            intervalHandles: [],
+        };
+
+        for (const entry of e.target.queryTriggerEntries())
+        {
+            const input = entry.forceQueryInputElements();
+            switch (input?.type)
+            {
+                case "every-seconds":
+                {
+                    let seconds;
+                    seconds = input.seconds.textContent;
+                    seconds = Number(seconds);
+                    seconds = seconds > 0.01 ? seconds : 0.01;
+
+                    listens.intervalHandles.push(setInterval(
+                        triggerAutomation.bind(undefined, e.target),
+                        seconds * 1000));
+                    break;
+                }
+                case "when-pin":
+                {
+                    listens.pinChangeListens.push(
+                    {
+                        deviceName: input.device.textContent,
+                        pinName: input.pin.textContent,
+                        forHigh: input.value.isHigh,
+                    });
+                    break;
+                }
+                case "when-pin-for-seconds":
+                {
+                    let seconds;
+                    seconds = input.seconds.textContent;
+                    seconds = Number(seconds);
+                    seconds = seconds > 0.01 ? seconds : 0.01;
+
+                    listens.pinHoldListens.push(
+                    {
+                        deviceName: input.device.textContent,
+                        pinName: input.pin.textContent,
+                        forHigh: input.value.isHigh,
+                        holdTime: seconds,
+                        holdHandle: null,
+                    });
+                    break;
+                }
+            }
+        }
+
+        automationListens.set(e.target, listens);
+    }
+    else
+    {
+        const listens = automationListens.get(e.target);
+        if (listens !== undefined)
+        {
+            for (const handle of listens.intervalHandles)
+                clearInterval(handle);
+
+            for (const listen of listens.pinHoldListens)
+                if (listen.holdHandle !== null)
+                    clearInterval(listen.holdHandle);
+        }
+        automationListens.delete(e.target);
+    }
+});
+
+DeviceManager.addEventListener("device-pin-change", (e) =>
+{
+    nextListen: for (const [automation, listens] of automationListens)
+    {
+        for (const listen of listens.pinChangeListens)
+        {
+            if (listen.pinName !== e.target.forceQueryPinNameElement().textContent)
+                continue nextListen;
+
+            const device = e.target.closest("device-panel");
+            if (!(device instanceof DeviceManager.DevicePanelElement))
+                continue;
+
+            if (listen.deviceName !== device.forceQueryDeviceNameElement().textContent)
+                continue nextListen;
+
+            if (e.target.forceQueryPinControl().isHigh !== listen.forHigh)
+                continue nextListen;
+        }
+
+        triggerAutomation(automation);
+    }
+});
+
+/**
+@param {AutomationPanelElement} automation
+*/ export async function triggerAutomation(automation)
+{
+    for (const entry of automation.queryConditionEntries())
+    {
+        const input = entry.forceQueryInputElements();
+
+        switch (input?.type)
+        {
+            case "get-pin":
+            {
+                const device = [...DeviceManager.queryDevicePanels()]
+                    .find((device) =>
+                    {
+                        return device.forceQueryDeviceNameElement().textContent
+                            === input.device.textContent;
+                    });
+
+                if (device === undefined)
+                    return;
+
+                const pin = [...device.queryPinElements()]
+                    .find((pin) =>
+                    {
+                        return pin.forceQueryPinNameElement().textContent
+                            === input.pin.textContent;
+                    });
+
+                if (pin === undefined)
+                    return;
+
+                if (pin.forceQueryPinControl().isHigh !== input.value.isHigh)
+                    return;
+
+                break;
+            }
+            case "get-variable":
+            {
+                if ((variables[input.name.textContent] ?? "") !== input.value.textContent)
+                    return;
+
+                break;
+            }
+        }
+    }
+
+    for (const entry of automation.queryActionEntries())
+    {
+        const input = entry.forceQueryInputElements();
+
+        switch (input?.type)
+        {
+            case "set-pin":
+            {
+                const device = [...DeviceManager.queryDevicePanels()]
+                    .find((device) =>
+                    {
+                        return device.forceQueryDeviceNameElement().textContent
+                            === input.device.textContent;
+                    });
+
+                if (device === undefined)
+                    break;
+
+                const pin = [...device.queryPinElements()]
+                    .find((pin) =>
+                    {
+                        return pin.forceQueryPinNameElement().textContent
+                            === input.pin.textContent;
+                    });
+
+                if (pin === undefined)
+                    break;
+
+                const control = pin.forceQueryPinControl();
+                const high = input.value.isHigh;
+                if (control.mode === "output" && control.isHigh !== high)
+                {
+                    control.isHigh = high;
+                    control.dispatchEvent(new Event(
+                        "change",
+                        {
+                            bubbles: true,
+                            cancelable: false,
+                            composed: false,
+                        }));
+                }
+
+                break;
+            }
+            case "set-variable":
+            {
+                variables[input.name.textContent] = input.value.textContent;
+
+                break;
+            }
+            case "record-message":
+            {
+                RecordManager.forceQueryRecordLogElement().append(
+                    `[${new Date().toLocaleTimeString("en-US")}] ${input.message.textContent}\n`);
+
+                break;
+            }
+            case "wait-seconds":
+            {
+                let seconds;
+                seconds = input.seconds.textContent;
+                seconds = Number(seconds);
+                seconds = seconds > 0.01 ? seconds : 0.01;
+
+                await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+
+                break;
+            }
+            case "call-automation":
+            {
+                const automation = [...queryAutomationPanels()]
+                    .find((automation) =>
+                    {
+                        return automation.forceQueryAutomationNameElement().textContent
+                            === input.name.textContent;
+                    });
+
+                if (automation !== undefined)
+                    triggerAutomation(automation);
+            }
+        }
+    }
+}

@@ -1,16 +1,18 @@
+import { PinSwitch } from "../../elements/pin-switch.js";
 
 /**
 @typedef {
 {
-    "automation-change": AutomationChangeEvent,
+    "automation-entry-change": AutomationEntryChangeEvent,
+    "automation-entry-removed": AutomationEntryRemovedEvent,
+    "automation-entry-moved-up": AutomationEntryMovedUpEvent,
+    "automation-entry-moved-down": AutomationEntryMovedDownEvent,
 }
 } AutomationEntryEventMap
 */
 
-import { PinSwitch } from "../../elements/pin-switch.js";
-
 /**
-*/ export class AutomationChangeEvent extends Event
+*/ export class AutomationEntryChangeEvent extends Event
 {
     /**
     @param {
@@ -19,7 +21,79 @@ import { PinSwitch } from "../../elements/pin-switch.js";
     } init
     @public*/ constructor(init)
     {
-        super("automation-entry-name-change", init);
+        super("automation-entry-change", init);
+    }
+
+    /**
+    @returns {AutomationEntryElement}
+    @public @override @readonly*/ get target()
+    {
+        const target = super.target;
+        if (target instanceof AutomationEntryElement)
+            return target;
+        throw new TypeError();
+    }
+}
+
+/**
+*/ export class AutomationEntryRemovedEvent extends Event
+{
+    /**
+    @param {
+        EventInit
+        & {}
+    } init
+    @public*/ constructor(init)
+    {
+        super("automation-entry-removed", init);
+    }
+
+    /**
+    @returns {AutomationEntryElement}
+    @public @override @readonly*/ get target()
+    {
+        const target = super.target;
+        if (target instanceof AutomationEntryElement)
+            return target;
+        throw new TypeError();
+    }
+}
+
+/**
+*/ export class AutomationEntryMovedUpEvent extends Event
+{
+    /**
+    @param {
+        EventInit
+        & {}
+    } init
+    @public*/ constructor(init)
+    {
+        super("automation-entry-moved-up", init);
+    }
+
+    /**
+    @returns {AutomationEntryElement}
+    @public @override @readonly*/ get target()
+    {
+        const target = super.target;
+        if (target instanceof AutomationEntryElement)
+            return target;
+        throw new TypeError();
+    }
+}
+
+/**
+*/ export class AutomationEntryMovedDownEvent extends Event
+{
+    /**
+    @param {
+        EventInit
+        & {}
+    } init
+    @public*/ constructor(init)
+    {
+        super("automation-entry-moved-down", init);
     }
 
     /**
@@ -68,7 +142,7 @@ import { PinSwitch } from "../../elements/pin-switch.js";
 
         this.addEventListener("change", () =>
         {
-            this.dispatchEvent(new AutomationChangeEvent(
+            this.dispatchEvent(new AutomationEntryChangeEvent(
             {
                 bubbles: true,
                 cancelable: false,
@@ -78,12 +152,49 @@ import { PinSwitch } from "../../elements/pin-switch.js";
 
         this.addEventListener("input", () =>
         {
-            this.dispatchEvent(new AutomationChangeEvent(
+            this.dispatchEvent(new AutomationEntryChangeEvent(
             {
                 bubbles: true,
                 cancelable: false,
                 composed: false,
             }));
+        });
+
+        this.addEventListener("click", (e) =>
+        {
+            switch (true)
+            {
+                case this.isEntryRemoveButton(e.target):
+                {
+                    this.dispatchEvent(new AutomationEntryRemovedEvent(
+                    {
+                        bubbles: true,
+                        cancelable: false,
+                        composed: false,
+                    }));
+                    break;
+                }
+                case this.isEntryMoveUpButton(e.target):
+                {
+                    this.dispatchEvent(new AutomationEntryMovedUpEvent(
+                    {
+                        bubbles: true,
+                        cancelable: false,
+                        composed: false,
+                    }));
+                    break;
+                }
+                case this.isEntryMoveDownButton(e.target):
+                {
+                    this.dispatchEvent(new AutomationEntryMovedDownEvent(
+                    {
+                        bubbles: true,
+                        cancelable: false,
+                        composed: false,
+                    }));
+                    break;
+                }
+            }
         });
     }
 
@@ -125,6 +236,108 @@ import { PinSwitch } from "../../elements/pin-switch.js";
             this.removeAttribute("type");
         else
             this.setAttribute("type", value);
+    }
+
+    /**
+    @returns {HTMLButtonElement?}
+    @public*/ queryEntryRemoveButton()
+    {
+        // @ts-expect-error
+        return HTMLElement.prototype.querySelector.call(
+            this,
+            `& button.entry-remove-button`);
+    }
+
+    /**
+    @returns {HTMLButtonElement}
+    @public*/ forceQueryEntryRemoveButton()
+    {
+        const element = AutomationEntryElement.prototype.queryEntryRemoveButton
+            .call(this);
+        if (element === null)
+            throw new TypeError(
+                `Missing entry remove button.`);
+        return element;
+    }
+
+    /**
+    @param {EventTarget?} element
+    @returns {element is HTMLButtonElement}
+    @public*/ isEntryRemoveButton(element)
+    {
+        return element instanceof Element
+            && Node.prototype.contains.call(this, element)
+            && Element.prototype.matches.call(
+                element,
+                `automation-entry button.entry-remove-button`);
+    }
+
+    /**
+    @returns {HTMLButtonElement?}
+    @public*/ queryEntryMoveUpButton()
+    {
+        // @ts-expect-error
+        return HTMLElement.prototype.querySelector.call(
+            this,
+            `& button.entry-up-button`);
+    }
+
+    /**
+    @returns {HTMLButtonElement}
+    @public*/ forceQueryEntryMoveUpButton()
+    {
+        const element = AutomationEntryElement.prototype.queryEntryMoveUpButton
+            .call(this);
+        if (element === null)
+            throw new TypeError(
+                `Missing entry move up button.`);
+        return element;
+    }
+
+    /**
+    @param {EventTarget?} element
+    @returns {element is HTMLButtonElement}
+    @public*/ isEntryMoveUpButton(element)
+    {
+        return element instanceof Element
+            && Node.prototype.contains.call(this, element)
+            && Element.prototype.matches.call(
+                element,
+                `automation-entry button.entry-up-button`);
+    }
+
+    /**
+    @returns {HTMLButtonElement?}
+    @public*/ queryEntryMoveDownButton()
+    {
+        // @ts-expect-error
+        return HTMLElement.prototype.querySelector.call(
+            this,
+            `& button.entry-down-button`);
+    }
+
+    /**
+    @returns {HTMLButtonElement}
+    @public*/ forceQueryEntryMoveDownButton()
+    {
+        const element = AutomationEntryElement.prototype.queryEntryMoveDownButton
+            .call(this);
+        if (element === null)
+            throw new TypeError(
+                `Missing entry move down button.`);
+        return element;
+    }
+
+    /**
+    @param {EventTarget?} element
+    @returns {element is HTMLButtonElement}
+    @public*/ isEntryMoveDownButton(element)
+    {
+        return element instanceof Element
+            && Node.prototype.contains.call(this, element)
+            && Element.prototype.matches.call(
+                element,
+                `automation-entry button.entry-down-button`);
     }
 
     /**
@@ -184,7 +397,7 @@ import { PinSwitch } from "../../elements/pin-switch.js";
     }
     @public*/ forceQueryInputElements()
     {
-        switch (this.type)
+        switch (this.getAttribute("type"))
         {
             case "every-seconds":
             {
@@ -395,19 +608,19 @@ import { PinSwitch } from "../../elements/pin-switch.js";
     {
         const buttons = /*html*/`
             <button
-                class="automation-remove-button">
+                class="entry-remove-button">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M1 1L9 9M1 9L5 5L9 1" stroke="white" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </button>
             <button
-                class="automation-up-button">
+                class="entry-up-button">
                 <svg width="11" height="6" viewBox="0 0 11 6" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M1.5 5L5.5 1L9.5 5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </button>
             <button
-                class="automation-down-button">
+                class="entry-down-button">
                 <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M1 1L5 5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
@@ -494,6 +707,21 @@ import { PinSwitch } from "../../elements/pin-switch.js";
                             ${buttons}
                         `;
                         break;
+                    case "get-variable":
+                        this.innerHTML = /*html*/`
+                            <div>
+                                If variable named
+                                <span
+                                    class="name"
+                                    contenteditable="plaintext-only"></span>
+                                equals
+                                <pin-switch
+                                    class="value"
+                                    pin-mode="output"></pin-switch>
+                            </div>
+                            ${buttons}
+                        `;
+                        break;
                     case "set-pin":
                         this.innerHTML = /*html*/`
                             <div>
@@ -504,6 +732,21 @@ import { PinSwitch } from "../../elements/pin-switch.js";
                                 in device named
                                 <span
                                     class="device"
+                                    contenteditable="plaintext-only"></span>
+                                to
+                                <pin-switch
+                                    class="value"
+                                    pin-mode="output"></pin-switch>
+                            </div>
+                            ${buttons}
+                        `;
+                        break;
+                    case "set-variable":
+                        this.innerHTML = /*html*/`
+                            <div>
+                                Set variable named
+                                <span
+                                    class="name"
                                     contenteditable="plaintext-only"></span>
                                 to
                                 <pin-switch
@@ -532,6 +775,17 @@ import { PinSwitch } from "../../elements/pin-switch.js";
                                     class="seconds"
                                     contenteditable="plaintext-only"></span>
                                 seconds
+                            </div>
+                            ${buttons}
+                        `;
+                        break;
+                    case "call-automation":
+                        this.innerHTML = /*html*/`
+                            <div>
+                                Trigger automation named
+                                <span
+                                    class="seconds"
+                                    contenteditable="plaintext-only"></span>
                             </div>
                             ${buttons}
                         `;

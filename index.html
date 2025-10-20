@@ -8,9 +8,25 @@
     <link rel="stylesheet" href="./css/for/index.css">
     <script type="module" src="./js/base.js"></script>
     <script type="module" src="./js/for/index.js"></script>
+    <script type="module" src="./js/elements/edge-resizer.js"></script>
 </head>
-<body>
-    <div id="device-section">
+<body
+    style="
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        flex-flow: row nowrap;
+        justify-content: start;
+        align-items: stretch;">
+    <div
+        id="device-section"
+        style="
+            overflow-y: scroll;
+            flex: 1;
+            flex-basis: 100%;">
         <header>
             <span>Devices</span>
         </header>
@@ -18,27 +34,29 @@
             <button id="new-device">New Device</button>
         </div>
     </div>
-    <div id="automation-section">
+    <div
+        id="automation-section"
+        style="
+            overflow-y: scroll;
+            flex: 1;
+            flex-basis: 100%;">
         <header>
-            <span>Automation</span>
+            <span>Automations</span>
         </header>
         <div id="automation-list">
             <button id="new-automation">New Automation</button>
         </div>
     </div>
-    <div id="record-section">
+    <div
+        id="record-section"
+        style="
+            overflow-y: scroll;
+            flex: 1;
+            flex-basis: 100%;">
         <header>
             <span>Log</span>
         </header>
         <div id="record-log" contenteditable="plaintext-only"></div>
-        <div id="record-controls">
-            <button id="record-clear">Clear</button>
-            <label>
-                <span>Record</span>
-                <input id="record-recording" type="checkbox">
-            </label>
-            <button id="record-save">Save</button>
-        </div>
     </div>
 </body>
 </html>

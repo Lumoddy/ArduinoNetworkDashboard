@@ -30,7 +30,9 @@ export * from "./device-panel-element.js";
 */ export function isDeviceListElement(element)
 {
     return element instanceof Element
-        && element.matches("div#device-list");
+        && Element.prototype.matches.call(
+            element,
+            "div#device-list");
 }
 
 /**
@@ -57,7 +59,28 @@ export * from "./device-panel-element.js";
 */ export function isNewDeviceButton(element)
 {
     return element instanceof Element
-        && element.matches("button#new-device");
+        && Element.prototype.matches.call(
+            element,
+            "button#new-device");
+}
+
+/**
+@returns {NodeListOf<DevicePanelElement>}
+*/ export function queryDevicePanels()
+{
+    return document.querySelectorAll(
+        `div#device-list > device-panel`);
+}
+
+/**
+@param {EventTarget?} element
+@returns {element is DevicePanelElement}
+*/ export function isDevicePanel(element)
+{
+    return element instanceof DevicePanelElement
+        && Element.prototype.matches.call(
+            element,
+            `div#device-list > device-panel`);
 }
 
 /**

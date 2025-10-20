@@ -10,7 +10,7 @@ AutomationEntryEventMap
 & {
     "automation-name-change": AutomationNameChangeEvent,
     "automation-active-change": AutomationActiveChangeEvent,
-    "automation-disconnected": AutomationRemovedEvent,
+    "automation-removed": AutomationRemovedEvent,
 }
 } AutomationPanelEventMap
 */
@@ -143,11 +143,21 @@ AutomationEntryEventMap
             switch (true)
             {
                 case this.isEditToggle(e.target):
+                {
                     this.setEditMode(e.target.checked);
                     break;
+                }
                 case this.isActiveToggle(e.target):
-                    this.setActive(e.target.checked);
+                {
+                    this.dispatchEvent(new AutomationActiveChangeEvent(
+                    {
+                        isActive: e.target.checked,
+                        bubbles: true,
+                        cancelable: false,
+                        composed: false,
+                    }));
                     break;
+                }
                 case this.isNewTriggerButton(e.target):
                 {
                     if (e.target.value === "")
@@ -201,6 +211,56 @@ AutomationEntryEventMap
                         composed: false,
                     }));
                     break;
+            }
+        });
+
+        this.addEventListener("automation-entry-removed", (e) =>
+        {
+            switch (true)
+            {
+                case this.isTriggerEntry(e.target):
+                case this.isConditionEntry(e.target):
+                case this.isActionEntry(e.target):
+                    e.target.remove();
+                    break;
+            }
+        });
+
+        this.addEventListener("automation-entry-moved-up", (e) =>
+        {
+            console.log(e);
+
+            switch (true)
+            {
+                case this.isTriggerEntry(e.target):
+                case this.isConditionEntry(e.target):
+                case this.isActionEntry(e.target):
+                {
+                    const previousSibling = e.target.previousSibling;
+                    if (this.isTriggerEntry(previousSibling)
+                        || this.isConditionEntry(previousSibling)
+                        || this.isActionEntry(previousSibling))
+                        previousSibling.before(e.target);
+                    break;
+                }
+            }
+        });
+
+        this.addEventListener("automation-entry-moved-down", (e) =>
+        {
+            switch (true)
+            {
+                case this.isTriggerEntry(e.target):
+                case this.isConditionEntry(e.target):
+                case this.isActionEntry(e.target):
+                {
+                    const nextSibling = e.target.nextSibling;
+                    if (this.isTriggerEntry(nextSibling)
+                        || this.isConditionEntry(nextSibling)
+                        || this.isActionEntry(nextSibling))
+                        nextSibling.after(e.target);
+                    break;
+                }
             }
         });
     }
@@ -279,6 +339,18 @@ AutomationEntryEventMap
     /**
     @public*/ disconnect()
     {
+        if (AutomationPanelElement.prototype.forceQueryActiveToggle
+            .call(this).checked)
+        {
+            this.dispatchEvent(new AutomationActiveChangeEvent(
+            {
+                isActive: false,
+                bubbles: true,
+                cancelable: false,
+                composed: false,
+            }));
+        }
+
         EventTarget.prototype.dispatchEvent
             .call(this, new AutomationRemovedEvent(
             {
@@ -303,21 +375,43 @@ AutomationEntryEventMap
                 `& select.new-automation-trigger,` +
                 `& select.new-automation-condition,` +
                 `& select.new-automation-action,` +
-                `& automation-entry span.automation-entry-name.editing,` +
-                `& automation-entry entry-mode-switch.automation-entry-control.editing`))
+                `& automation-entry button.entry-remove-button,` +
+                `& automation-entry button.entry-up-button,` +
+                `& automation-entry button.entry-down-button`))
                 if (element instanceof HTMLElement)
                     element.style.display = "";
 
             for (const element of Element.prototype.querySelectorAll.call(
                 this,
-                `& span.automation-name:not(.editing),` +
-                `& automation-entry span.automation-entry-name:not(.editing),` +
-                `& automation-entry entry-switch.automation-entry-control:not(.editing)`))
+                `& span.automation-name:not(.editing)`))
                 if (element instanceof HTMLElement)
                     element.style.display = "none";
 
-            activeToggle.checked = false;
+            for (const element of Element.prototype.querySelectorAll.call(
+                this,
+                `& automation-entry input,` +
+                `& automation-entry pin-switch,` +
+                `& automation-entry pin-mode-switch`))
+                element.removeAttribute("disabled");
+
+            for (const element of Element.prototype.querySelectorAll.call(
+                this,
+                `& automation-entry [contenteditable="false"]`))
+                element.setAttribute("contenteditable", "plaintext-only");
+
             activeToggle.disabled = true;
+
+            if (activeToggle.checked)
+            {
+                activeToggle.checked = false;
+                this.dispatchEvent(new AutomationActiveChangeEvent(
+                {
+                    isActive: false,
+                    bubbles: true,
+                    cancelable: false,
+                    composed: false,
+                }));
+            }
         }
         else
         {
@@ -328,18 +422,29 @@ AutomationEntryEventMap
                 `& select.new-automation-trigger,` +
                 `& select.new-automation-condition,` +
                 `& select.new-automation-action,` +
-                `& automation-entry span.automation-entry-name.editing,` +
-                `& automation-entry entry-mode-switch.automation-entry-control.editing`))
+                `& automation-entry button.entry-remove-button,` +
+                `& automation-entry button.entry-up-button,` +
+                `& automation-entry button.entry-down-button`))
                 if (element instanceof HTMLElement)
                     element.style.display = "none";
 
             for (const element of Element.prototype.querySelectorAll.call(
                 this,
-                `& span.automation-name:not(.editing),` +
-                `& automation-entry span.automation-entry-name:not(.editing),` +
-                `& automation-entry entry-switch.automation-entry-control:not(.editing)`))
+                `& span.automation-name:not(.editing)`))
                 if (element instanceof HTMLElement)
                     element.style.display = "";
+
+            for (const element of Element.prototype.querySelectorAll.call(
+                this,
+                `& automation-entry input,` +
+                `& automation-entry pin-switch,` +
+                `& automation-entry pin-mode-switch`))
+                element.setAttribute("disabled", "");
+
+            for (const element of Element.prototype.querySelectorAll.call(
+                this,
+                `& automation-entry [contenteditable="plaintext-only"]`))
+                element.setAttribute("contenteditable", "false");
 
             activeToggle.disabled = false;
         }
@@ -354,6 +459,14 @@ AutomationEntryEventMap
     {
         AutomationPanelElement.prototype.forceQueryActiveToggle
             .call(this).checked = active;
+
+        this.dispatchEvent(new AutomationActiveChangeEvent(
+        {
+            isActive: active,
+            bubbles: true,
+            cancelable: false,
+            composed: false,
+        }));
     }
 
     /**

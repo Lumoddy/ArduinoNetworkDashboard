@@ -26,7 +26,7 @@ DevicePinEventMap
     } init
     @public*/ constructor(init)
     {
-        super("device-name-change", init);
+        super("device-name-change", init);0
 
         /**
         @type {string}
@@ -133,7 +133,8 @@ DevicePinEventMap
 
         this.addEventListener("device-pin-change", (e) =>
         {
-            if (this._arduinoInterface === null)
+            if (this._arduinoInterface === null
+                || e.target.forceQueryPinEditingControl().mode !== "output")
                 return;
 
             this._arduinoInterface.setPin(

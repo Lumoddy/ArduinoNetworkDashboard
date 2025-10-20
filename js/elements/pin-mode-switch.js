@@ -155,7 +155,7 @@ import { html } from "../common.js";
     @protected @readonly*/ static observedAttributes = /** @type {const} */(
     [
         "pin-mode",
-        "disable",
+        "disabled",
     ]);
 
     /**
@@ -203,7 +203,7 @@ import { html } from "../common.js";
     @returns {boolean}
     @public*/ get disabled()
     {
-        switch (this.getAttribute("disable"))
+        switch (this.getAttribute("disabled"))
         {
             case "true":
             case "":
@@ -216,9 +216,9 @@ import { html } from "../common.js";
     @public*/ set disabled(value)
     {
         if (value)
-            this.setAttribute("disable", "");
+            this.setAttribute("disabled", "");
         else
-            this.removeAttribute("disable");
+            this.removeAttribute("disabled");
     }
 
     /**
@@ -277,7 +277,7 @@ import { html } from "../common.js";
 
                 break;
             }
-            case "disable":
+            case "disabled":
             {
                 const disabled = newValue === "" || newValue === "true";
 
