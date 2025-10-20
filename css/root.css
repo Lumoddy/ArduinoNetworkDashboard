@@ -30,6 +30,8 @@
 
     --outline: solid var(--color-line) 3px;
     --outline-offset: 4px;
+    --outline-automation: solid var(--color-inset--up) 3px;
+    --outline-automation-offset: 4px;
     --outline--hidden: solid oklch(from var(--color-line) l c h / 0) 0px;
     --outline-offset--hidden: 12px;
 

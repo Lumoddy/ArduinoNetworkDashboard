@@ -715,9 +715,9 @@ import { PinSwitch } from "../../elements/pin-switch.js";
                                     class="name"
                                     contenteditable="plaintext-only"></span>
                                 equals
-                                <pin-switch
+                                <span
                                     class="value"
-                                    pin-mode="output"></pin-switch>
+                                    contenteditable="plaintext-only"></span>
                             </div>
                             ${buttons}
                         `;
@@ -749,9 +749,9 @@ import { PinSwitch } from "../../elements/pin-switch.js";
                                     class="name"
                                     contenteditable="plaintext-only"></span>
                                 to
-                                <pin-switch
+                                <span
                                     class="value"
-                                    pin-mode="output"></pin-switch>
+                                    contenteditable="plaintext-only"></span>
                             </div>
                             ${buttons}
                         `;
@@ -784,7 +784,7 @@ import { PinSwitch } from "../../elements/pin-switch.js";
                             <div>
                                 Trigger automation named
                                 <span
-                                    class="seconds"
+                                    class="name"
                                     contenteditable="plaintext-only"></span>
                             </div>
                             ${buttons}

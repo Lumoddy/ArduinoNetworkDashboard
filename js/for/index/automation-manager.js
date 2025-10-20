@@ -1,6 +1,7 @@
 import * as DeviceManager from "./device-manager.js";
 import * as RecordManager from "./record-manager.js";
 import { AutomationPanelElement } from "./automation-panel-element.js";
+import { AutomationEntryElement } from "./automation-entry-element.js";
 /**
 @import { AutomationPanelEventMap } from "./automation-panel-element.js"
 */
@@ -243,6 +244,7 @@ addEventListener("automation-removed", (e) =>
             deviceName: string,
             pinName: string,
             forHigh: boolean,
+            glowElement: AutomationEntryElement,
         }[],
         pinHoldListens:
         {
@@ -251,8 +253,14 @@ addEventListener("automation-removed", (e) =>
             forHigh: boolean,
             holdTime: number,
             holdHandle: ReturnType<typeof setInterval>?,
+            holdResult: boolean?,
+            glowElement: AutomationEntryElement,
         }[],
-        intervalHandles: (ReturnType<typeof setInterval>)[],
+        intervalHandles:
+        {
+            intervalHandle: ReturnType<typeof setInterval>,
+            glowElement: AutomationEntryElement,
+        }[],
     }>}
 */ const automationListens = new Map();
 
@@ -285,9 +293,18 @@ addEventListener("automation-active-change", (e) =>
                     seconds = Number(seconds);
                     seconds = seconds > 0.01 ? seconds : 0.01;
 
-                    listens.intervalHandles.push(setInterval(
-                        triggerAutomation.bind(undefined, e.target),
-                        seconds * 1000));
+                    listens.intervalHandles.push(
+                    {
+                        intervalHandle: setInterval(
+                            () =>
+                            {
+                                triggerAutomation(e.target);
+                                entry.setAttribute("active", "");
+                                requestAnimationFrame(() => entry.removeAttribute("active"));
+                            },
+                            seconds * 1000),
+                        glowElement: entry,
+                    });
                     break;
                 }
                 case "when-pin":
@@ -297,6 +314,7 @@ addEventListener("automation-active-change", (e) =>
                         deviceName: input.device.textContent,
                         pinName: input.pin.textContent,
                         forHigh: input.value.isHigh,
+                        glowElement: entry,
                     });
                     break;
                 }
@@ -314,6 +332,8 @@ addEventListener("automation-active-change", (e) =>
                         forHigh: input.value.isHigh,
                         holdTime: seconds,
                         holdHandle: null,
+                        holdResult: null,
+                        glowElement: entry,
                     });
                     break;
                 }
@@ -327,12 +347,12 @@ addEventListener("automation-active-change", (e) =>
         const listens = automationListens.get(e.target);
         if (listens !== undefined)
         {
-            for (const handle of listens.intervalHandles)
-                clearInterval(handle);
+            for (const listen of listens.intervalHandles)
+                clearInterval(listen.intervalHandle);
 
             for (const listen of listens.pinHoldListens)
                 if (listen.holdHandle !== null)
-                    clearInterval(listen.holdHandle);
+                    clearTimeout(listen.holdHandle);
         }
         automationListens.delete(e.target);
     }
@@ -342,6 +362,8 @@ DeviceManager.addEventListener("device-pin-change", (e) =>
 {
     nextListen: for (const [automation, listens] of automationListens)
     {
+        let listensForPin = false;
+
         for (const listen of listens.pinChangeListens)
         {
             if (listen.pinName !== e.target.forceQueryPinNameElement().textContent)
@@ -356,9 +378,57 @@ DeviceManager.addEventListener("device-pin-change", (e) =>
 
             if (e.target.forceQueryPinControl().isHigh !== listen.forHigh)
                 continue nextListen;
+
+            listensForPin = true;
+
+            listen.glowElement.setAttribute("active", "");
+            requestAnimationFrame(() => listen.glowElement.removeAttribute("active"));
         }
 
+        if (!listensForPin)
+            continue nextListen;
+
         triggerAutomation(automation);
+    }
+
+    for (const [automation, listens] of automationListens)
+    {
+        for (const listen of listens.pinHoldListens)
+        {
+            if (listen.pinName !== e.target.forceQueryPinNameElement().textContent)
+                continue;
+
+            const device = e.target.closest("device-panel");
+            if (!(device instanceof DeviceManager.DevicePanelElement))
+                continue;
+
+            if (listen.deviceName !== device.forceQueryDeviceNameElement().textContent)
+                continue;
+
+            if (e.target.forceQueryPinControl().isHigh === listen.forHigh)
+            {
+                if (listen.holdHandle === null
+                    && listen.holdResult !== listen.forHigh)
+                {
+                    listen.holdHandle = setTimeout(
+                        () =>
+                        {
+                            listen.holdResult = listen.forHigh;
+
+                            triggerAutomation(automation);
+                            listen.glowElement.setAttribute("active", "");
+                            requestAnimationFrame(() => listen.glowElement.removeAttribute("active"));
+                        },
+                        listen.holdTime * 1000);
+                }
+            }
+            else if (listen.holdHandle !== null)
+            {
+                clearTimeout(listen.holdHandle);
+                listen.holdHandle = null;
+                listen.holdResult = null;
+            }
+        }
     }
 });
 
@@ -451,18 +521,36 @@ DeviceManager.addEventListener("device-pin-change", (e) =>
                         }));
                 }
 
+                entry.setAttribute("active", "");
+                requestAnimationFrame(() => entry.removeAttribute("active"));
+
                 break;
             }
             case "set-variable":
             {
                 variables[input.name.textContent] = input.value.textContent;
 
+                entry.setAttribute("active", "");
+                requestAnimationFrame(() => entry.removeAttribute("active"));
+
                 break;
             }
             case "record-message":
             {
-                RecordManager.forceQueryRecordLogElement().append(
-                    `[${new Date().toLocaleTimeString("en-US")}] ${input.message.textContent}\n`);
+                const log = RecordManager.forceQueryRecordLogElement();
+
+                const isScrolledToBottom
+                    = log.scrollHeight - log.clientHeight
+                    <= log.scrollTop + 1;
+
+                log.append(
+                    `[${new Date().toLocaleTimeString()}] ${input.message.textContent}\n`);
+
+                if (isScrolledToBottom)
+                    log.scrollTop = log.scrollHeight - log.clientHeight;
+
+                entry.setAttribute("active", "");
+                requestAnimationFrame(() => entry.removeAttribute("active"));
 
                 break;
             }
@@ -472,6 +560,9 @@ DeviceManager.addEventListener("device-pin-change", (e) =>
                 seconds = input.seconds.textContent;
                 seconds = Number(seconds);
                 seconds = seconds > 0.01 ? seconds : 0.01;
+
+                entry.setAttribute("active", "");
+                requestAnimationFrame(() => entry.removeAttribute("active"));
 
                 await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 
@@ -486,8 +577,13 @@ DeviceManager.addEventListener("device-pin-change", (e) =>
                             === input.name.textContent;
                     });
 
-                if (automation !== undefined)
+                if (automation?.forceQueryActiveToggle().checked === true)
                     triggerAutomation(automation);
+
+                entry.setAttribute("active", "");
+                requestAnimationFrame(() => entry.removeAttribute("active"));
+
+                break;
             }
         }
     }
