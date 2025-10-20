@@ -612,6 +612,7 @@ import { arduinoResponseDeserializer } from "./response.js";
                     let byte;
                     escapeSequence: switch (byte = yield)
                     {
+                        // @ts-expect-error: Fallthrough.
                         case _CONTROL_BYTE: switch (byte = yield)
                         {
                             case _START_TEXT_BYTE:
@@ -1055,5 +1056,5 @@ import { arduinoResponseDeserializer } from "./response.js";
         }
     }
 }
-// @ts-ignore: Allow use in debug console.
+// @ts-expect-error: Allow use in debug console.
 window.ArduinoInterface = ArduinoInterface;

@@ -274,6 +274,7 @@ import { html } from "../common.js";
     [
         "pin-mode",
         "is-high",
+        "disabled",
     ]);
 
     /**
@@ -324,9 +325,31 @@ import { html } from "../common.js";
     }
 
     /**
+    @returns {boolean}
+    @public*/ get disabled()
+    {
+        switch (this.getAttribute("disabled"))
+        {
+            case "true":
+            case "":
+                return true;
+            default:
+                return false;
+        }
+    }
+    /**
+    @public*/ set disabled(value)
+    {
+        if (value)
+            this.setAttribute("disabled", "");
+        else
+            this.removeAttribute("disabled");
+    }
+
+    /**
     @param {typeof PinSwitch["observedAttributes"][number]} attributeName
-    @param {string | null} oldValue
-    @param {string | null} newValue
+    @param {string?} oldValue
+    @param {string?} newValue
     @protected*/ attributeChangedCallback(attributeName, oldValue, newValue)
     {
         switch (attributeName)
@@ -351,18 +374,32 @@ import { html } from "../common.js";
                 if (input instanceof HTMLInputElement)
                     input.checked = isHigh;
 
-                if (this.getAttribute("pin-mode") === "output")
+                switch (this.getAttribute("pin-mode"))
                 {
-                    this.dispatchEvent(new PinSwitchChangeEvent(
-                        "change",
-                        {
-                            wasHigh,
-                            isHigh,
-                            bubbles: true,
-                            cancelable: false,
-                            composed: false,
-                        }));
+                    case "input":
+                    case "output":
+                        this.dispatchEvent(new PinSwitchChangeEvent(
+                            "change",
+                            {
+                                wasHigh,
+                                isHigh,
+                                bubbles: true,
+                                cancelable: false,
+                                composed: false,
+                            }));
+                        break;
                 }
+
+                break;
+            }
+            case "disabled":
+            {
+                const disabled = newValue === "" || newValue === "true";
+
+                for (const element of this._shadowRoot.querySelectorAll(
+                    `:host input`))
+                    if (element instanceof HTMLInputElement)
+                        element.disabled = disabled;
 
                 break;
             }

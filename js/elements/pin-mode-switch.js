@@ -156,6 +156,7 @@ import { ensureIsPinMode } from "../elements/pin-switch.js";
     @protected @readonly*/ static observedAttributes = /** @type {const} */(
     [
         "pin-mode",
+        "disabled",
     ]);
 
     /**
@@ -172,7 +173,7 @@ import { ensureIsPinMode } from "../elements/pin-switch.js";
         {
             if (e.target instanceof HTMLInputElement)
             {
-                // @ts-ignore: checked internally.
+                // @ts-expect-error: checked internally.
                 this.mode = e.target.value;
             }
 
@@ -196,9 +197,31 @@ import { ensureIsPinMode } from "../elements/pin-switch.js";
     }
 
     /**
+    @returns {boolean}
+    @public*/ get disabled()
+    {
+        switch (this.getAttribute("disabled"))
+        {
+            case "true":
+            case "":
+                return true;
+            default:
+                return false;
+        }
+    }
+    /**
+    @public*/ set disabled(value)
+    {
+        if (value)
+            this.setAttribute("disabled", "");
+        else
+            this.removeAttribute("disabled");
+    }
+
+    /**
     @param {typeof PinModeSwitch["observedAttributes"][number]} attributeName
-    @param {string | null} oldValue
-    @param {string | null} newValue
+    @param {string?} oldValue
+    @param {string?} newValue
     @protected*/ attributeChangedCallback(attributeName, oldValue, newValue)
     {
         switch (attributeName)
@@ -236,6 +259,17 @@ import { ensureIsPinMode } from "../elements/pin-switch.js";
                         cancelable: false,
                         composed: false,
                     }));
+
+                break;
+            }
+            case "disabled":
+            {
+                const disabled = newValue === "" || newValue === "true";
+
+                for (const element of this._shadowRoot.querySelectorAll(
+                    `:host input`))
+                    if (element instanceof HTMLInputElement)
+                        element.disabled = disabled;
 
                 break;
             }

@@ -4,11 +4,11 @@ import { GraphView } from "./graph-view.js";
 */ export class GraphElement
 {
     /**
-    @type {GraphView | null}
+    @type {GraphView?}
     @private*/ _graph = null;
 
     /**
-    @type {MutationObserver | null}
+    @type {MutationObserver?}
     @private*/ _mutationObserver = null;
 
     /**
@@ -16,7 +16,7 @@ import { GraphView } from "./graph-view.js";
     @private*/ _element = undefined;
 
     /**
-    @returns {GraphView | null}
+    @returns {GraphView?}
     @public @readonly*/ get graph()
     {
         return this._graph;

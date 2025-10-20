@@ -1,47 +1,141 @@
 
-arduino-interface-panel
+body
 {
-    padding: 8px;
-    border-radius: var(--border-radius);
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-flow: row nowrap;
+    justify-content: start;
+    align-items: stretch;
+}
+
+#device-section,
+#automation-section,
+#record-section
+{
+    flex: 1;
+    flex-basis: 100%;
+}
+
+#record-section
+{
+    display: flex;
+    flex-flow: column nowrap;
+    justify-content: start;
+    align-items: stretch;
+}
+
+#device-section,
+#automation-section
+{
+    overflow-y: scroll;
+}
+
+#record-log
+{
+    flex: 1;
+    overflow-y: scroll;
+}
+
+device-panel,
+automation-panel,
+automation-entry
+{
+    margin: 4px 2px 8px;
+    padding: 8px 12px;
+    border: none;
     display: block;
-    background: var(--color-panel);
+    border-radius: var(--border-radius);
+    background-color: var(--color-panel);
+    box-shadow: var(--shadow-outset);
+}
 
-    > .header
+automation-entry :is(pin-switch, pin-mode-switch)
+{
+    margin: 0 0 -6px;
+}
+
+.automation-triggers,
+.automation-conditions,
+.automation-actions
+{
+    position: relative;
+    margin: 4px 2px 8px;
+    padding: 0.2em 0.5em;
+    border-radius: var(--border-radius);
+    background-color: var(--color-inset);
+    box-shadow: var(--shadow-inset);
+    display: flex;
+    flex-flow: column nowrap;
+    justify-content: start;
+    align-items: start;
+}
+
+.device-pins
+{
+    display: flex;
+    flex-flow: row wrap;
+    justify-content: start;
+    align-items: start;
+    align-content: start;
+}
+
+device-pin
+{
+    margin: 8px;
+    display: flex;
+    flex-flow: column nowrap;
+    justify-content: start;
+    align-items: center;
+
+    & > :is(pin-switch, pin-mode-switch)
     {
-        display: flex;
-        flex-flow: row nowrap;
-        align-items: stretch;
-        justify-content: stretch;
-
-        > .title
-        {
-            flex: 1;
-        }
-
-        > .buttons
-        {
-            
-        }
+        margin: 0;
     }
 
-    > .pin-container
+    & > .device-pin-model
     {
-        display: flex;
-        flex-flow: row wrap;
-        align-items: start;
-        justify-content: start;
+        color: hsl(from var(--color-line) h s l / 0.5);
+        font-size: 0.8em;
 
-        > .pin
-        {
-            display: flex;
-            flex-flow: column nowrap;
-            align-items: center;
-            justify-content: stretch;
-
-            > *
-            {
-                margin: 0;
-            }
-        }
+        &::before { content: "("; }
+        &::after { content: ")"; }
     }
+}
+
+automation-entry
+{
+    outline: var(--outline--hidden);
+    outline-offset: var(--outline-offset--hidden);
+    transition:
+        var(--transition-outline--hidden);
+
+    &[active]
+    {
+        outline: var(--outline-automation);
+        outline-offset: var(--outline-automation-offset);
+        transition:
+            var(--transition-outline);
+    }
+}
+
+automation-panel:has(input.automation-edit-toggle:checked) > :is(
+    .automation-triggers,
+    .automation-conditions,
+    .automation-actions)
+{
+    padding-bottom: calc(2em + 24px);
+}
+
+.automation-triggers > .new-automation-trigger,
+.automation-conditions > .new-automation-condition,
+.automation-actions > .new-automation-action
+{
+    position: absolute;
+    bottom: 0;
+    left: 0.2em;
+    right: 0.2em;
 }
